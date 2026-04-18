@@ -1,7 +1,48 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import path from 'path'
+<<<<<<< HEAD
 
 let mainWindow: BrowserWindow | null = null
+=======
+import fs from 'fs'
+import initSqlJs from 'sql.js'
+
+let mainWindow: BrowserWindow | null = null
+let db: any = null
+const dbPath = path.join(app.getPath('userData'), 'sad_database.sqlite')
+
+async function initDatabase() {
+  try {
+    const SQL = await initSqlJs()
+    
+    if (fs.existsSync(dbPath)) {
+      const fileBuffer = fs.readFileSync(dbPath)
+      db = new SQL.Database(fileBuffer)
+      console.log('Database loaded from:', dbPath)
+    } else {
+      db = new SQL.Database()
+      db.run(`
+        CREATE TABLE IF NOT EXISTS settings (
+          key TEXT PRIMARY KEY,
+          value TEXT
+        );
+      `)
+      saveDatabase()
+      console.log('New database created at:', dbPath)
+    }
+  } catch (err) {
+    console.error('Failed to initialize database:', err)
+  }
+}
+
+function saveDatabase() {
+  if (db) {
+    const data = db.export()
+    const buffer = Buffer.from(data)
+    fs.writeFileSync(dbPath, buffer)
+  }
+}
+>>>>>>> 820b54e1e2c5bb389d585aa24e15dc223569e3b9
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -25,7 +66,12 @@ function createWindow() {
   })
 }
 
+<<<<<<< HEAD
 app.whenReady().then(() => {
+=======
+app.whenReady().then(async () => {
+  await initDatabase()
+>>>>>>> 820b54e1e2c5bb389d585aa24e15dc223569e3b9
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -33,11 +79,17 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
+  saveDatabase()
   if (process.platform !== 'darwin') {
     app.quit()
   }
 })
 
 ipcMain.handle('get-db-status', () => {
+<<<<<<< HEAD
   return 'Connected'
 })
+=======
+  return db ? 'Connected (sql.js)' : 'Disconnected'
+})
+>>>>>>> 820b54e1e2c5bb389d585aa24e15dc223569e3b9
