@@ -1,9 +1,5 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import path from 'path'
-<<<<<<< HEAD
-
-let mainWindow: BrowserWindow | null = null
-=======
 import fs from 'fs'
 import initSqlJs from 'sql.js'
 
@@ -21,15 +17,30 @@ async function initDatabase() {
       console.log('Database loaded from:', dbPath)
     } else {
       db = new SQL.Database()
-      db.run(`
-        CREATE TABLE IF NOT EXISTS settings (
-          key TEXT PRIMARY KEY,
-          value TEXT
-        );
-      `)
-      saveDatabase()
-      console.log('New database created at:', dbPath)
+      console.log('New database created')
     }
+
+    // Garantir que as tabelas existam
+    db.run(`
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      );
+      
+      CREATE TABLE IF NOT EXISTS pessoas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        cpf TEXT,
+        telefone TEXT,
+        endereco TEXT,
+        email TEXT,
+        orgao TEXT,
+        observacoes TEXT,
+        criado_em TEXT,
+        atualizado_em TEXT
+      );
+    `)
+    saveDatabase()
   } catch (err) {
     console.error('Failed to initialize database:', err)
   }
@@ -42,7 +53,6 @@ function saveDatabase() {
     fs.writeFileSync(dbPath, buffer)
   }
 }
->>>>>>> 820b54e1e2c5bb389d585aa24e15dc223569e3b9
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -66,13 +76,10 @@ function createWindow() {
   })
 }
 
-<<<<<<< HEAD
-app.whenReady().then(() => {
-=======
 app.whenReady().then(async () => {
   await initDatabase()
->>>>>>> 820b54e1e2c5bb389d585aa24e15dc223569e3b9
   createWindow()
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -85,11 +92,34 @@ app.on('window-all-closed', () => {
   }
 })
 
+// IPC Handlers
 ipcMain.handle('get-db-status', () => {
-<<<<<<< HEAD
-  return 'Connected'
-})
-=======
   return db ? 'Connected (sql.js)' : 'Disconnected'
 })
->>>>>>> 820b54e1e2c5bb389d585aa24e15dc223569e3b9
+
+ipcMain.handle('db-query', async (event, { sql, params = [] }) => {
+  try {
+    const stmt = db.prepare(sql)
+    stmt.bind(params)
+    const results = []
+    while (stmt.step()) {
+      results.push(stmt.getAsObject())
+    }
+    stmt.free()
+    return { success: true, data: results }
+  } catch (error: any) {
+    console.error('DB Query Error:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+ipcMain.handle('db-run', async (event, { sql, params = [] }) => {
+  try {
+    db.run(sql, params)
+    saveDatabase()
+    return { success: true }
+  } catch (error: any) {
+    console.error('DB Run Error:', error)
+    return { success: false, error: error.message }
+  }
+})
