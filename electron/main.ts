@@ -2,7 +2,6 @@ import { app, BrowserWindow, ipcMain } from 'electron'
 import path from 'path'
 import fs from 'fs'
 
-// Usando require para garantir o carregamento correto do módulo nativo
 const Database = require('better-sqlite3')
 
 let mainWindow: BrowserWindow | null = null
@@ -14,7 +13,6 @@ function initDatabase() {
     db = new Database(dbPath)
     console.log('Database initialized at:', dbPath)
 
-    // Garantir que as tabelas existam
     db.exec(`
       CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
@@ -32,6 +30,21 @@ function initDatabase() {
         observacoes TEXT,
         criado_em TEXT,
         atualizado_em TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS protocolos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pessoa_id INTEGER,
+        numero TEXT NOT NULL,
+        assunto TEXT NOT NULL,
+        descricao TEXT,
+        data_entrada TEXT,
+        prazo TEXT,
+        status TEXT,
+        historico TEXT,
+        criado_em TEXT,
+        atualizado_em TEXT,
+        FOREIGN KEY (pessoa_id) REFERENCES pessoas(id)
       );
     `)
   } catch (err) {
@@ -76,7 +89,6 @@ app.on('window-all-closed', () => {
   }
 })
 
-// IPC Handlers
 ipcMain.handle('get-db-status', () => {
   return db ? 'Connected (better-sqlite3)' : 'Disconnected'
 })
@@ -95,8 +107,8 @@ ipcMain.handle('db-query', async (event, { sql, params = [] }) => {
 ipcMain.handle('db-run', async (event, { sql, params = [] }) => {
   try {
     const stmt = db.prepare(sql)
-    stmt.run(params)
-    return { success: true }
+    const result = stmt.run(params)
+    return { success: true, lastInsertRowid: result.lastInsertRowid }
   } catch (error: any) {
     console.error('DB Run Error:', error)
     return { success: false, error: error.message }
