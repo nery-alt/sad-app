@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
 
@@ -46,6 +46,20 @@ function initDatabase() {
         atualizado_em TEXT,
         FOREIGN KEY (pessoa_id) REFERENCES pessoas(id)
       );
+
+      CREATE TABLE IF NOT EXISTS documentos_recebidos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pessoa_id INTEGER,
+        protocolo_id INTEGER,
+        nome TEXT NOT NULL,
+        tipo TEXT,
+        caminho TEXT NOT NULL,
+        descricao TEXT,
+        data_recebimento TEXT,
+        criado_em TEXT,
+        FOREIGN KEY (pessoa_id) REFERENCES pessoas(id),
+        FOREIGN KEY (protocolo_id) REFERENCES protocolos(id)
+      );
     `)
   } catch (err) {
     console.error('Failed to initialize database:', err)
@@ -89,6 +103,7 @@ app.on('window-all-closed', () => {
   }
 })
 
+// IPC Handlers - Database
 ipcMain.handle('get-db-status', () => {
   return db ? 'Connected (better-sqlite3)' : 'Disconnected'
 })
@@ -111,6 +126,42 @@ ipcMain.handle('db-run', async (event, { sql, params = [] }) => {
     return { success: true, lastInsertRowid: result.lastInsertRowid }
   } catch (error: any) {
     console.error('DB Run Error:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+// IPC Handlers - Files & Dialogs
+ipcMain.handle('select-file', async () => {
+  if (!mainWindow) return null
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: [
+      { name: 'Documentos e Imagens', extensions: ['pdf', 'docx', 'doc', 'jpg', 'jpeg', 'png'] }
+    ]
+  })
+  
+  if (result.canceled || result.filePaths.length === 0) return null
+  
+  const filePath = result.filePaths[0]
+  const fileName = path.basename(filePath)
+  const fileExt = path.extname(filePath).toLowerCase().replace('.', '')
+  
+  return {
+    path: filePath,
+    name: fileName,
+    type: fileExt
+  }
+})
+
+ipcMain.handle('open-file', async (event, filePath) => {
+  try {
+    if (fs.existsSync(filePath)) {
+      await shell.openPath(filePath)
+      return { success: true }
+    } else {
+      return { success: false, error: 'Arquivo não encontrado no caminho especificado.' }
+    }
+  } catch (error: any) {
     return { success: false, error: error.message }
   }
 })
