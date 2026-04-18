@@ -50,6 +50,9 @@
       "target": [
         "portable"
       ]
-    }
+    },
+    "asarUnpack": [
+      "**/*.node"
+    ]
   }
 }
