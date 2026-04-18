@@ -241,6 +241,19 @@ const App: React.FC = () => {
     return protocolos.filter(pr => pr.pessoa_id === selectedPessoa.id)
   }, [protocolos, selectedPessoa])
 
+  // Menu Items Definition
+  const menuItems = [
+    { name: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+    { name: 'Pessoas / Dossiês', icon: <Users size={20} /> },
+    { name: 'Protocolos', icon: <FileText size={20} /> },
+    { name: 'Documentos Recebidos', icon: <Inbox size={20} /> },
+    { name: 'Documentos Gerados', icon: <FilePlus size={20} /> },
+    { name: 'Agenda', icon: <Calendar size={20} /> },
+    { name: 'Tarefas', icon: <CheckSquare size={20} /> },
+    { name: 'Busca Global', icon: <Search size={20} /> },
+    { name: 'Configurações', icon: <Settings size={20} /> },
+  ]
+
   // Renderers
   const renderDashboard = () => {
     const stats = {
