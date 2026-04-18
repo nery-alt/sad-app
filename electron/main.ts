@@ -1,9 +1,43 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import path from 'path'
-import Database from 'better-sqlite3'
+import fs from 'fs'
+import initSqlJs from 'sql.js'
 
 let mainWindow: BrowserWindow | null = null
 let db: any = null
+const dbPath = path.join(app.getPath('userData'), 'sad_database.sqlite')
+
+async function initDatabase() {
+  try {
+    const SQL = await initSqlJs()
+    
+    if (fs.existsSync(dbPath)) {
+      const fileBuffer = fs.readFileSync(dbPath)
+      db = new SQL.Database(fileBuffer)
+      console.log('Database loaded from:', dbPath)
+    } else {
+      db = new SQL.Database()
+      db.run(`
+        CREATE TABLE IF NOT EXISTS settings (
+          key TEXT PRIMARY KEY,
+          value TEXT
+        );
+      `)
+      saveDatabase()
+      console.log('New database created at:', dbPath)
+    }
+  } catch (err) {
+    console.error('Failed to initialize database:', err)
+  }
+}
+
+function saveDatabase() {
+  if (db) {
+    const data = db.export()
+    const buffer = Buffer.from(data)
+    fs.writeFileSync(dbPath, buffer)
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -27,22 +61,8 @@ function createWindow() {
   })
 }
 
-function initDatabase() {
-  const dbPath = path.join(app.getPath('userData'), 'sad_database.db')
-  db = new Database(dbPath)
-  
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS settings (
-      key TEXT PRIMARY KEY,
-      value TEXT
-    );
-  `)
-  
-  console.log('Database initialized at:', dbPath)
-}
-
-app.whenReady().then(() => {
-  initDatabase()
+app.whenReady().then(async () => {
+  await initDatabase()
   createWindow()
 
   app.on('activate', () => {
@@ -51,11 +71,12 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
+  saveDatabase()
   if (process.platform !== 'darwin') {
     app.quit()
   }
 })
 
 ipcMain.handle('get-db-status', () => {
-  return db ? 'Connected' : 'Disconnected'
+  return db ? 'Connected (sql.js)' : 'Disconnected'
 })
