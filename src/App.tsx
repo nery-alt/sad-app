@@ -49,13 +49,13 @@ const App: React.FC = () => {
           <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              { label: 'Protocolos em aberto', value: 0, color: 'border-[#1A56DB]' },
-              { label: 'Prazos vencendo', value: 0, color: 'border-[#D97706]' },
-              { label: 'Prazos vencidos', value: 0, color: 'border-[#DC2626]' },
-              { label: 'Concluídos no mês', value: 0, color: 'border-[#16A34A]' },
+              { label: 'Protocolos em aberto', value: 0, color: 'border-primary-btn' },
+              { label: 'Prazos vencendo', value: 0, color: 'border-deadline-alert' },
+              { label: 'Prazos vencidos', value: 0, color: 'border-error-expired' },
+              { label: 'Concluídos no mês', value: 0, color: 'border-success' },
             ].map((card, idx) => (
-              <div key={idx} className="bg-[#F5F7FA] p-6 rounded-lg shadow-sm border-l-4" style={{ borderColor: card.color.split('[')[1].split(']')[0] }}>
-                <p className="text-[#6B7280] text-sm font-medium">{card.label}</p>
+              <div key={idx} className={`bg-surface-card p-6 rounded-lg shadow-sm border-l-4 ${card.color}`}>
+                <p className="text-text-secondary text-sm font-medium">{card.label}</p>
                 <p className="text-3xl font-bold mt-2">{card.value}</p>
               </div>
             ))}
@@ -65,7 +65,7 @@ const App: React.FC = () => {
     }
     return (
       <div className="p-8 flex items-center justify-center h-full">
-        <p className="text-[#6B7280] text-lg">Seção {activeTab} em desenvolvimento.</p>
+        <p className="text-text-secondary text-lg">Seção {activeTab} em desenvolvimento.</p>
       </div>
     )
   }
@@ -73,9 +73,9 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen w-full overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-64 bg-[#0B1D3A] text-white flex flex-col shrink-0">
+      <aside className="w-64 bg-sidebar-bg text-white flex flex-col shrink-0">
         <div className="p-6 border-b border-white/10">
-          <h2 className="text-xl font-bold tracking-wider">SAD</h2>
+          <h2 className="text-xl font-bold tracking-wider text-white">SAD</h2>
           <p className="text-xs text-white/50">Solução Administrativa Digital</p>
         </div>
         <nav className="flex-1 overflow-y-auto py-4">
@@ -83,9 +83,9 @@ const App: React.FC = () => {
             <button
               key={item.name}
               onClick={() => setActiveTab(item.name)}
-              className={`w-full flex items-center gap-3 px-6 py-3 transition-colors ${
+              className={`w-full flex items-center gap-3 px-6 py-3 transition-colors cursor-pointer ${
                 activeTab === item.name 
-                ? 'bg-[#F97316] text-white' 
+                ? 'bg-active-highlight text-white' 
                 : 'text-white/70 hover:bg-white/5 hover:text-white'
               }`}
             >
@@ -97,15 +97,15 @@ const App: React.FC = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col bg-white overflow-hidden">
+      <main className="flex-1 flex flex-col bg-main-bg overflow-hidden">
         {/* Topbar */}
         <header className="h-16 border-b border-gray-200 flex items-center justify-between px-8 shrink-0">
-          <div className="text-sm font-medium text-[#6B7280]">
+          <div className="text-sm font-medium text-text-secondary">
             {activeTab}
           </div>
           <div className="flex items-center gap-4">
             <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold ${
-              isOnline ? 'bg-[#16A34A]/10 text-[#16A34A]' : 'bg-[#DC2626]/10 text-[#DC2626]'
+              isOnline ? 'bg-success/10 text-success' : 'bg-error-expired/10 text-error-expired'
             }`}>
               {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
               {isOnline ? 'ONLINE' : 'OFFLINE'}
