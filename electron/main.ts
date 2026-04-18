@@ -1,27 +1,21 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import path from 'path'
 import fs from 'fs'
-import initSqlJs from 'sql.js'
+
+// Usando require para garantir o carregamento correto do módulo nativo
+const Database = require('better-sqlite3')
 
 let mainWindow: BrowserWindow | null = null
 let db: any = null
-const dbPath = path.join(app.getPath('userData'), 'sad_database.sqlite')
+const dbPath = path.join(app.getPath('userData'), 'sad_database.db')
 
-async function initDatabase() {
+function initDatabase() {
   try {
-    const SQL = await initSqlJs()
-    
-    if (fs.existsSync(dbPath)) {
-      const fileBuffer = fs.readFileSync(dbPath)
-      db = new SQL.Database(fileBuffer)
-      console.log('Database loaded from:', dbPath)
-    } else {
-      db = new SQL.Database()
-      console.log('New database created')
-    }
+    db = new Database(dbPath)
+    console.log('Database initialized at:', dbPath)
 
     // Garantir que as tabelas existam
-    db.run(`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
         value TEXT
@@ -40,17 +34,8 @@ async function initDatabase() {
         atualizado_em TEXT
       );
     `)
-    saveDatabase()
   } catch (err) {
     console.error('Failed to initialize database:', err)
-  }
-}
-
-function saveDatabase() {
-  if (db) {
-    const data = db.export()
-    const buffer = Buffer.from(data)
-    fs.writeFileSync(dbPath, buffer)
   }
 }
 
@@ -76,8 +61,8 @@ function createWindow() {
   })
 }
 
-app.whenReady().then(async () => {
-  await initDatabase()
+app.whenReady().then(() => {
+  initDatabase()
   createWindow()
 
   app.on('activate', () => {
@@ -86,7 +71,6 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => {
-  saveDatabase()
   if (process.platform !== 'darwin') {
     app.quit()
   }
@@ -94,18 +78,13 @@ app.on('window-all-closed', () => {
 
 // IPC Handlers
 ipcMain.handle('get-db-status', () => {
-  return db ? 'Connected (sql.js)' : 'Disconnected'
+  return db ? 'Connected (better-sqlite3)' : 'Disconnected'
 })
 
 ipcMain.handle('db-query', async (event, { sql, params = [] }) => {
   try {
     const stmt = db.prepare(sql)
-    stmt.bind(params)
-    const results = []
-    while (stmt.step()) {
-      results.push(stmt.getAsObject())
-    }
-    stmt.free()
+    const results = stmt.all(params)
     return { success: true, data: results }
   } catch (error: any) {
     console.error('DB Query Error:', error)
@@ -115,8 +94,8 @@ ipcMain.handle('db-query', async (event, { sql, params = [] }) => {
 
 ipcMain.handle('db-run', async (event, { sql, params = [] }) => {
   try {
-    db.run(sql, params)
-    saveDatabase()
+    const stmt = db.prepare(sql)
+    stmt.run(params)
     return { success: true }
   } catch (error: any) {
     console.error('DB Run Error:', error)
