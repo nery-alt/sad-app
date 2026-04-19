@@ -60,6 +60,20 @@ function initDatabase() {
         FOREIGN KEY (pessoa_id) REFERENCES pessoas(id),
         FOREIGN KEY (protocolo_id) REFERENCES protocolos(id)
       );
+
+      CREATE TABLE IF NOT EXISTS documentos_gerados (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pessoa_id INTEGER,
+        protocolo_id INTEGER,
+        tipo TEXT,
+        titulo TEXT NOT NULL,
+        conteudo TEXT,
+        caminho TEXT,
+        data_geracao TEXT,
+        criado_em TEXT,
+        FOREIGN KEY (pessoa_id) REFERENCES pessoas(id),
+        FOREIGN KEY (protocolo_id) REFERENCES protocolos(id)
+      );
     `)
   } catch (err) {
     console.error('Failed to initialize database:', err)
@@ -150,6 +164,26 @@ ipcMain.handle('select-file', async () => {
     path: filePath,
     name: fileName,
     type: fileExt
+  }
+})
+
+ipcMain.handle('save-file-dialog', async (event, { defaultName, extensions }) => {
+  if (!mainWindow) return null
+  const result = await dialog.showSaveDialog(mainWindow, {
+    defaultPath: defaultName,
+    filters: [{ name: 'Documentos', extensions }]
+  })
+  
+  if (result.canceled || !result.filePath) return null
+  return result.filePath
+})
+
+ipcMain.handle('write-file', async (event, { filePath, buffer }) => {
+  try {
+    fs.writeFileSync(filePath, Buffer.from(buffer))
+    return { success: true }
+  } catch (error: any) {
+    return { success: false, error: error.message }
   }
 })
 

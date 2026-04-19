@@ -30,8 +30,12 @@ import {
   Image as ImageIcon,
   FileDigit,
   ExternalLink,
-  Download
+  Download,
+  Save,
+  FileDown,
+  FileEdit
 } from 'lucide-react'
+import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from 'docx'
 
 declare global {
   interface Window {
@@ -40,6 +44,8 @@ declare global {
       dbQuery: (payload: { sql: string, params?: any[] }) => Promise<{ success: boolean, data?: any[], error?: string }>;
       dbRun: (payload: { sql: string, params?: any[] }) => Promise<{ success: boolean, error?: string, lastInsertRowid?: number }>;
       selectFile: () => Promise<{ path: string, name: string, type: string } | null>;
+      saveFileDialog: (payload: { defaultName: string, extensions: string[] }) => Promise<string | null>;
+      writeFile: (payload: { filePath: string, buffer: ArrayBuffer }) => Promise<{ success: boolean, error?: string }>;
       openFile: (filePath: string) => Promise<{ success: boolean, error?: string }>;
     }
   }
@@ -92,6 +98,20 @@ interface DocumentoRecebido {
   protocolo_numero?: string;
 }
 
+interface DocumentoGerado {
+  id?: number;
+  pessoa_id: number;
+  protocolo_id?: number;
+  tipo: string;
+  titulo: string;
+  conteudo: string;
+  caminho?: string;
+  data_geracao: string;
+  criado_em: string;
+  pessoa_nome?: string;
+  protocolo_numero?: string;
+}
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('Dashboard')
   const [isOnline, setIsOnline] = useState(navigator.onLine)
@@ -115,12 +135,20 @@ const App: React.FC = () => {
   })
   const [novaMovimentacao, setNovaMovimentacao] = useState('')
 
-  // Estados Documentos
+  // Estados Documentos Recebidos
   const [documentos, setDocumentos] = useState<DocumentoRecebido[]>([])
   const [searchDocumento, setSearchDocumento] = useState('')
   const [isDocFormOpen, setIsDocFormOpen] = useState(false)
   const [docFormData, setDocFormData] = useState<Partial<DocumentoRecebido>>({
     pessoa_id: 0, protocolo_id: undefined, nome: '', tipo: '', caminho: '', descricao: '', data_recebimento: new Date().toISOString().split('T')[0]
+  })
+
+  // Estados Documentos Gerados
+  const [documentosGerados, setDocumentosGerados] = useState<DocumentoGerado[]>([])
+  const [searchDocGerado, setSearchDocGerado] = useState('')
+  const [isDocGeradoFormOpen, setIsDocGeradoFormOpen] = useState(false)
+  const [docGeradoFormData, setDocGeradoFormData] = useState<Partial<DocumentoGerado>>({
+    pessoa_id: 0, protocolo_id: undefined, tipo: 'ofício', titulo: '', conteudo: '', data_geracao: new Date().toISOString().split('T')[0]
   })
 
   useEffect(() => {
@@ -157,6 +185,15 @@ const App: React.FC = () => {
             ORDER BY d.criado_em DESC`
     })
     if (resDocs.success && resDocs.data) setDocumentos(resDocs.data)
+
+    const resDocsG = await window.electronAPI.dbQuery({
+      sql: `SELECT dg.*, p.nome as pessoa_nome, pr.numero as protocolo_numero 
+            FROM documentos_gerados dg 
+            LEFT JOIN pessoas p ON dg.pessoa_id = p.id 
+            LEFT JOIN protocolos pr ON dg.protocolo_id = pr.id 
+            ORDER BY dg.criado_em DESC`
+    })
+    if (resDocsG.success && resDocsG.data) setDocumentosGerados(resDocsG.data)
   }
 
   // Handlers Pessoas
@@ -249,7 +286,7 @@ const App: React.FC = () => {
     fetchData()
   }
 
-  // Handlers Documentos
+  // Handlers Documentos Recebidos
   const handleImportDoc = async () => {
     const file = await window.electronAPI.selectFile()
     if (file) {
@@ -288,6 +325,100 @@ const App: React.FC = () => {
     }
   }
 
+  // Handlers Documentos Gerados
+  const handleSaveDocGerado = async (exportDoc: boolean = false) => {
+    const now = new Date().toISOString()
+    let docId = docGeradoFormData.id
+    let filePath = docGeradoFormData.caminho
+
+    if (exportDoc) {
+      const person = pessoas.find(p => p.id === docGeradoFormData.pessoa_id)
+      const protocol = protocolos.find(pr => pr.id === docGeradoFormData.protocolo_id)
+      
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: [
+            new Paragraph({
+              text: `SAD - SOLUÇÃO ADMINISTRATIVA DIGITAL`,
+              heading: HeadingLevel.HEADING_1,
+              alignment: AlignmentType.CENTER,
+            }),
+            new Paragraph({
+              text: `${docGeradoFormData.tipo?.toUpperCase()}: ${docGeradoFormData.titulo}`,
+              heading: HeadingLevel.HEADING_2,
+              alignment: AlignmentType.CENTER,
+            }),
+            new Paragraph({ text: "" }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: `INTERESSADO: `, bold: true }),
+                new TextRun({ text: person?.nome || "N/A" }),
+              ],
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: `PROTOCOLO: `, bold: true }),
+                new TextRun({ text: protocol?.numero || "N/A" }),
+              ],
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: `DATA: `, bold: true }),
+                new TextRun({ text: new Date().toLocaleDateString('pt-BR') }),
+              ],
+            }),
+            new Paragraph({ text: "" }),
+            new Paragraph({ text: "------------------------------------------------------------------------------------------------------------------------" }),
+            new Paragraph({ text: "" }),
+            ...docGeradoFormData.conteudo?.split('\n').map(line => new Paragraph({ text: line })) || [],
+          ],
+        }],
+      })
+
+      const buffer = await Packer.toBuffer(doc)
+      const savePath = await window.electronAPI.saveFileDialog({
+        defaultName: `${docGeradoFormData.tipo}_${docGeradoFormData.titulo.replace(/\s+/g, '_')}.docx`,
+        extensions: ['docx']
+      })
+
+      if (savePath) {
+        const res = await window.electronAPI.writeFile({ filePath: savePath, buffer })
+        if (res.success) {
+          filePath = savePath
+        } else {
+          alert('Erro ao salvar arquivo: ' + res.error)
+          return
+        }
+      } else {
+        return // Cancelado pelo usuário
+      }
+    }
+
+    if (docId) {
+      await window.electronAPI.dbRun({
+        sql: `UPDATE documentos_gerados SET pessoa_id=?, protocolo_id=?, tipo=?, titulo=?, conteudo=?, caminho=?, data_geracao=?, criado_em=? WHERE id=?`,
+        params: [docGeradoFormData.pessoa_id, docGeradoFormData.protocolo_id || null, docGeradoFormData.tipo, docGeradoFormData.titulo, docGeradoFormData.conteudo, filePath || null, now, now, docId]
+      })
+    } else {
+      const res = await window.electronAPI.dbRun({
+        sql: `INSERT INTO documentos_gerados (pessoa_id, protocolo_id, tipo, titulo, conteudo, caminho, data_geracao, criado_em) VALUES (?,?,?,?,?,?,?,?)`,
+        params: [docGeradoFormData.pessoa_id, docGeradoFormData.protocolo_id || null, docGeradoFormData.tipo, docGeradoFormData.titulo, docGeradoFormData.conteudo, filePath || null, now, now]
+      })
+      docId = res.lastInsertRowid
+    }
+
+    setIsDocGeradoFormOpen(false)
+    fetchData()
+  }
+
+  const handleDeleteDocGerado = async (id: number) => {
+    if (confirm('Excluir este documento gerado?')) {
+      await window.electronAPI.dbRun({ sql: 'DELETE FROM documentos_gerados WHERE id = ?', params: [id] })
+      fetchData()
+    }
+  }
+
   // Helpers
   const getPrazoStatus = (prazo: string) => {
     if (!prazo) return null
@@ -305,6 +436,7 @@ const App: React.FC = () => {
     const t = type.toLowerCase()
     if (['jpg', 'jpeg', 'png'].includes(t)) return <ImageIcon className="text-blue-500" size={20} />
     if (t === 'pdf') return <FileDigit className="text-red-500" size={20} />
+    if (t === 'docx' || t === 'doc') return <FileText className="text-blue-700" size={20} />
     return <File className="text-gray-500" size={20} />
   }
 
@@ -325,6 +457,12 @@ const App: React.FC = () => {
     d.descricao?.toLowerCase().includes(searchDocumento.toLowerCase())
   ), [documentos, searchDocumento])
 
+  const filteredDocsGerados = useMemo(() => documentosGerados.filter(dg => 
+    dg.titulo.toLowerCase().includes(searchDocGerado.toLowerCase()) || 
+    dg.pessoa_nome?.toLowerCase().includes(searchDocGerado.toLowerCase()) ||
+    dg.tipo.toLowerCase().includes(searchDocGerado.toLowerCase())
+  ), [documentosGerados, searchDocGerado])
+
   const pessoaProtocolos = useMemo(() => {
     if (!selectedPessoa) return []
     return protocolos.filter(pr => pr.pessoa_id === selectedPessoa.id)
@@ -334,6 +472,11 @@ const App: React.FC = () => {
     if (!selectedPessoa) return []
     return documentos.filter(d => d.pessoa_id === selectedPessoa.id)
   }, [documentos, selectedPessoa])
+
+  const pessoaDocsGerados = useMemo(() => {
+    if (!selectedPessoa) return []
+    return documentosGerados.filter(dg => dg.pessoa_id === selectedPessoa.id)
+  }, [documentosGerados, selectedPessoa])
 
   const menuItems = [
     { name: 'Dashboard', icon: <LayoutDashboard size={20} /> },
@@ -473,8 +616,34 @@ const App: React.FC = () => {
                   )}
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                  <h3 className="font-bold mb-4 flex items-center gap-2"><FilePlus size={18} className="text-success" /> Documentos Gerados</h3>
-                  <div className="py-6 text-center border-2 border-dashed border-gray-100 rounded-lg"><p className="text-text-secondary text-sm italic">Nenhum documento.</p></div>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold flex items-center gap-2"><FilePlus size={18} className="text-success" /> Documentos Gerados</h3>
+                    <button onClick={() => { setDocGeradoFormData({ pessoa_id: selectedPessoa.id, tipo: 'ofício', titulo: '', conteudo: '', data_geracao: new Date().toISOString().split('T')[0] }); setIsDocGeradoFormOpen(true); }} className="flex items-center gap-1 text-xs font-bold bg-success/10 text-success px-3 py-1.5 rounded-lg hover:bg-success/20 transition-colors"><Plus size={14} /> Novo Documento</button>
+                  </div>
+                  {pessoaDocsGerados.length > 0 ? (
+                    <div className="space-y-3">
+                      {pessoaDocsGerados.map(dg => (
+                        <div key={dg.id} className="p-4 border border-gray-100 rounded-lg flex items-center gap-4 group hover:border-success/30 transition-all">
+                          <div className="w-10 h-10 bg-surface-card rounded flex items-center justify-center shrink-0"><FileText className="text-success" size={20} /></div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="font-bold text-sm truncate">{dg.titulo}</p>
+                              <span className="text-[10px] bg-success/10 text-success px-1.5 py-0.5 rounded font-bold uppercase">{dg.tipo}</span>
+                            </div>
+                            <p className="text-xs text-text-secondary truncate">{dg.caminho ? 'Exportado' : 'Rascunho'}</p>
+                            <p className="text-[10px] text-text-secondary mt-1 uppercase font-bold">{dg.data_geracao}</p>
+                          </div>
+                          <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => { setDocGeradoFormData(dg); setIsDocGeradoFormOpen(true); }} className="p-2 text-primary-btn hover:bg-primary-btn/10 rounded" title="Editar"><FileEdit size={18} /></button>
+                            {dg.caminho && <button onClick={() => handleOpenFile(dg.caminho!)} className="p-2 text-success hover:bg-success/10 rounded" title="Abrir no Word"><ExternalLink size={18} /></button>}
+                            <button onClick={() => handleDeleteDocGerado(dg.id!)} className="p-2 text-error-expired hover:bg-error-expired/10 rounded" title="Excluir"><Trash2 size={18} /></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-8 text-center border-2 border-dashed border-gray-100 rounded-lg"><p className="text-text-secondary text-sm italic">Nenhum documento gerado.</p></div>
+                  )}
                 </div>
               </div>
             </div>
@@ -728,6 +897,66 @@ const App: React.FC = () => {
     )
   }
 
+  const renderDocumentosGeradosGlobal = () => {
+    return (
+      <div className="p-8 flex flex-col h-full overflow-hidden">
+        <div className="flex justify-between items-center mb-8 shrink-0">
+          <div><h1 className="text-2xl font-bold text-text-main">Documentos Gerados</h1><p className="text-text-secondary">Todos os documentos administrativos criados no sistema.</p></div>
+        </div>
+        <div className="mb-6 relative shrink-0">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary" size={20} />
+          <input type="text" placeholder="Buscar por título, tipo ou pessoa..." className="w-full pl-12 pr-4 py-3 bg-surface-card border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-btn/20 transition-all" value={searchDocGerado} onChange={(e) => setSearchDocGerado(e.target.value)} />
+        </div>
+        <div className="flex-1 overflow-y-auto pr-2">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-surface-card text-xs font-bold text-text-secondary uppercase">
+                <tr>
+                  <th className="px-6 py-4">Título / Tipo</th>
+                  <th className="px-6 py-4">Pessoa</th>
+                  <th className="px-6 py-4">Protocolo</th>
+                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filteredDocsGerados.map(dg => (
+                  <tr key={dg.id} className="hover:bg-gray-50 transition-colors group">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <FileText className="text-success" size={20} />
+                        <div className="min-w-0">
+                          <p className="font-bold text-sm truncate max-w-[200px]">{dg.titulo}</p>
+                          <span className="text-[10px] bg-success/10 text-success px-1.5 py-0.5 rounded font-bold uppercase">{dg.tipo}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm font-medium text-primary-btn cursor-pointer hover:underline" onClick={() => {
+                      const p = pessoas.find(p => p.id === dg.pessoa_id)
+                      if (p) { setSelectedPessoa(p); setActiveTab('Pessoas / Dossiês'); }
+                    }}>{dg.pessoa_nome}</td>
+                    <td className="px-6 py-4 text-xs font-bold text-text-secondary">{dg.protocolo_numero || '-'}</td>
+                    <td className="px-6 py-4">
+                      <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${dg.caminho ? 'bg-success/10 text-success' : 'bg-gray-100 text-gray-400'}`}>{dg.caminho ? 'EXPORTADO' : 'RASCUNHO'}</span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => { setDocGeradoFormData(dg); setIsDocGeradoFormOpen(true); }} className="p-2 text-primary-btn hover:bg-primary-btn/10 rounded" title="Editar"><FileEdit size={16} /></button>
+                        {dg.caminho && <button onClick={() => handleOpenFile(dg.caminho!)} className="p-2 text-success hover:bg-success/10 rounded" title="Abrir no Word"><ExternalLink size={16} /></button>}
+                        <button onClick={() => handleDeleteDocGerado(dg.id!)} className="p-2 text-error-expired hover:bg-error-expired/10 rounded" title="Excluir"><Trash2 size={16} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {filteredDocsGerados.length === 0 && <div className="py-20 text-center"><FilePlus size={48} className="mx-auto text-gray-200 mb-4" /><p className="text-text-secondary">Nenhum documento gerado encontrado.</p></div>}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-screen w-full overflow-hidden font-sans">
       <aside className="w-64 bg-sidebar-bg text-white flex flex-col shrink-0">
@@ -759,7 +988,8 @@ const App: React.FC = () => {
           {activeTab === 'Pessoas / Dossiês' && renderPessoas()}
           {activeTab === 'Protocolos' && renderProtocolos()}
           {activeTab === 'Documentos Recebidos' && renderDocumentosGlobal()}
-          {!['Dashboard', 'Pessoas / Dossiês', 'Protocolos', 'Documentos Recebidos'].includes(activeTab) && (
+          {activeTab === 'Documentos Gerados' && renderDocumentosGeradosGlobal()}
+          {!['Dashboard', 'Pessoas / Dossiês', 'Protocolos', 'Documentos Recebidos', 'Documentos Gerados'].includes(activeTab) && (
             <div className="p-8 flex items-center justify-center h-full"><p className="text-text-secondary text-lg">Seção {activeTab} em desenvolvimento.</p></div>
           )}
         </div>
@@ -817,7 +1047,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Modal Documento */}
+      {/* Modal Documento Recebido */}
       {isDocFormOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col">
@@ -845,6 +1075,58 @@ const App: React.FC = () => {
               <div><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Data de Recebimento</label><input type="date" className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none" value={docFormData.data_recebimento} onChange={e => setDocFormData({...docFormData, data_recebimento: e.target.value})} /></div>
               <div className="flex justify-end gap-4 pt-4"><button type="button" onClick={() => setIsDocFormOpen(false)} className="px-6 py-3 text-text-secondary font-bold hover:text-text-main">Cancelar</button><button type="submit" className="px-8 py-3 bg-deadline-alert text-white rounded-lg font-bold hover:opacity-90 shadow-lg">Finalizar Importação</button></div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Documento Gerado */}
+      {isDocGeradoFormOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-surface-card"><h2 className="text-xl font-bold text-sidebar-bg">{docGeradoFormData.id ? 'Editar Documento' : 'Novo Documento'}</h2><button onClick={() => setIsDocGeradoFormOpen(false)} className="text-text-secondary hover:text-text-main">✕</button></div>
+            <div className="p-8 overflow-y-auto space-y-6">
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Tipo de Documento *</label>
+                  <select 
+                    className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none"
+                    value={docGeradoFormData.tipo}
+                    onChange={e => setDocGeradoFormData({...docGeradoFormData, tipo: e.target.value})}
+                  >
+                    {['ofício', 'ata', 'memorando', 'despacho', 'declaração', 'relatório'].map(t => <option key={t} value={t}>{t.toUpperCase()}</option>)}
+                  </select>
+                </div>
+                <div><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Título do Documento *</label><input required className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none" value={docGeradoFormData.titulo} onChange={e => setDocGeradoFormData({...docGeradoFormData, titulo: e.target.value})} placeholder="Ex: Ofício de Encaminhamento" /></div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Vincular a Protocolo (Opcional)</label>
+                  <select 
+                    className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none"
+                    value={docGeradoFormData.protocolo_id || ''}
+                    onChange={e => setDocGeradoFormData({...docGeradoFormData, protocolo_id: e.target.value ? Number(e.target.value) : undefined})}
+                  >
+                    <option value="">Nenhum protocolo</option>
+                    {pessoaProtocolos.map(pr => <option key={pr.id} value={pr.id}>{pr.numero} - {pr.assunto}</option>)}
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Conteúdo do Documento</label>
+                  <textarea 
+                    rows={12} 
+                    className="w-full p-4 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none resize-none font-serif text-lg" 
+                    value={docGeradoFormData.conteudo} 
+                    onChange={e => setDocGeradoFormData({...docGeradoFormData, conteudo: e.target.value})}
+                    placeholder="Escreva o corpo do documento aqui..."
+                  />
+                </div>
+              </div>
+              <div className="flex justify-between items-center pt-4">
+                <button type="button" onClick={() => setIsDocGeradoFormOpen(false)} className="px-6 py-3 text-text-secondary font-bold hover:text-text-main">Cancelar</button>
+                <div className="flex gap-4">
+                  <button onClick={() => handleSaveDocGerado(false)} className="flex items-center gap-2 px-6 py-3 bg-white border border-gray-200 text-text-main rounded-lg font-bold hover:bg-gray-50 shadow-sm"><Save size={18} /> Salvar Rascunho</button>
+                  <button onClick={() => handleSaveDocGerado(true)} className="flex items-center gap-2 px-8 py-3 bg-success text-white rounded-lg font-bold hover:opacity-90 shadow-lg"><FileDown size={18} /> Exportar .docx</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
