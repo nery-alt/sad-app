@@ -35,7 +35,7 @@ export const Agenda: React.FC<AgendaProps> = ({
   }
 
   return (
-    <div className="p-8 flex flex-col h-full overflow-hidden">
+    <div className="p-4 flex flex-col h-full overflow-hidden">
       <div className="flex justify-between items-center mb-8 shrink-0">
         <div><h1 className="text-2xl font-bold">Agenda</h1><p className="text-text-secondary">Gerencie seus compromissos e reuniões.</p></div>
         <button onClick={() => { setFormData({ titulo: '', descricao: '', data: '', horario: '', realizado: 0, criado_em: '' }); setIsFormOpen(true); }} className="flex items-center gap-2 bg-primary-btn text-white px-6 py-3 rounded-lg font-bold hover:opacity-90 shadow-md"><Plus size={20} /> Novo Compromisso</button>
@@ -65,8 +65,8 @@ export const Agenda: React.FC<AgendaProps> = ({
       {isFormOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-surface-card"><h2 className="text-xl font-bold">Novo Compromisso</h2><button onClick={() => setIsFormOpen(false)} className="text-text-secondary hover:text-text-main">✕</button></div>
-            <form onSubmit={handleSave} className="p-8 overflow-y-auto space-y-6">
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-surface-card"><h2 className="text-xl font-bold">Novo Compromisso</h2><button onClick={() => setIsFormOpen(false)} className="text-text-secondary hover:text-text-main">✕</button></div>
+            <form onSubmit={handleSave} className="p-4 overflow-y-auto space-y-6">
               <div className="space-y-6">
                 <div><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Título *</label><input required className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none" value={formData.titulo} onChange={e => setFormData({...formData, titulo: e.target.value})} /></div>
                 <div><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Descrição</label><textarea rows={3} className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none resize-none" value={formData.descricao} onChange={e => setFormData({...formData, descricao: e.target.value})} /></div>

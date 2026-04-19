@@ -37,7 +37,7 @@ export const DocumentosRecebidos: React.FC<DocumentosRecebidosProps> = ({
   }
 
   return (
-    <div className="p-8 flex flex-col h-full overflow-hidden">
+    <div className="p-4 flex flex-col h-full overflow-hidden">
       <div className="mb-8 shrink-0"><h1 className="text-2xl font-bold">Documentos Recebidos</h1><p className="text-text-secondary">Todos os arquivos importados do sistema.</p></div>
       <div className="mb-6 relative shrink-0">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary" size={20} />

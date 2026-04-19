@@ -30,7 +30,7 @@ export const DocumentosGerados: React.FC<DocumentosGeradosProps> = ({
   ), [documentosGerados, searchDoc])
 
   return (
-    <div className="p-8 flex flex-col h-full overflow-hidden">
+    <div className="p-4 flex flex-col h-full overflow-hidden">
       <div className="mb-8 shrink-0"><h1 className="text-2xl font-bold">Documentos Gerados</h1><p className="text-text-secondary">Todos os documentos criados no sistema.</p></div>
       <div className="mb-6 relative shrink-0">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary" size={20} />
@@ -40,7 +40,7 @@ export const DocumentosGerados: React.FC<DocumentosGeradosProps> = ({
         <div className="space-y-3">
           {filteredDocs.map(doc => (
             <div key={doc.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all flex items-center gap-4 group">
-              <div className="w-12 h-12 bg-surface-card rounded flex items-center justify-center shrink-0"><FilePlus className="text-success" size={24} /></div>
+              <div className="w-12 h-12 bg-surface-card rounded flex items-center justify-center shrink-0"><FilePlus className="text-success" size={18} /></div>
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-sm">{doc.titulo}</p>
                 <p className="text-xs text-text-secondary truncate">{doc.pessoa_nome} • {doc.tipo.toUpperCase()} • {doc.caminho ? 'Exportado' : 'Rascunho'}</p>

@@ -47,7 +47,7 @@ export const Tarefas: React.FC<TarefasProps> = ({
   }
 
   return (
-    <div className="p-8 flex flex-col h-full overflow-hidden">
+    <div className="p-4 flex flex-col h-full overflow-hidden">
       <div className="flex justify-between items-center mb-8 shrink-0">
         <div><h1 className="text-2xl font-bold">Tarefas</h1><p className="text-text-secondary">Gerencie suas atividades e prazos.</p></div>
         <button onClick={() => { setFormData({ titulo: '', descricao: '', prioridade: 'media', prazo: '', status: 'pendente', criado_em: '', atualizado_em: '' }); setIsFormOpen(true); }} className="flex items-center gap-2 bg-primary-btn text-white px-6 py-3 rounded-lg font-bold hover:opacity-90 shadow-md"><Plus size={20} /> Nova Tarefa</button>
@@ -58,13 +58,13 @@ export const Tarefas: React.FC<TarefasProps> = ({
           <input type="text" placeholder="Buscar tarefa..." className="w-full pl-12 pr-4 py-3 bg-surface-card border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-btn/20" value={searchTarefa} onChange={(e) => setSearchTarefa(e.target.value)} />
         </div>
         <div className="flex gap-4">
-          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-4 py-2 bg-surface-card border border-gray-200 rounded-lg text-sm font-bold">
+          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-3 py-2 bg-surface-card border border-gray-200 rounded-lg text-sm font-bold">
             <option value="todos">Todos os Status</option>
             <option value="pendente">Pendente</option>
             <option value="em_andamento">Em Andamento</option>
             <option value="concluida">Concluída</option>
           </select>
-          <select value={filterPrioridade} onChange={(e) => setFilterPrioridade(e.target.value)} className="px-4 py-2 bg-surface-card border border-gray-200 rounded-lg text-sm font-bold">
+          <select value={filterPrioridade} onChange={(e) => setFilterPrioridade(e.target.value)} className="px-3 py-2 bg-surface-card border border-gray-200 rounded-lg text-sm font-bold">
             <option value="todos">Todas as Prioridades</option>
             <option value="alta">Alta</option>
             <option value="media">Média</option>
@@ -87,8 +87,8 @@ export const Tarefas: React.FC<TarefasProps> = ({
                   <p className="text-xs text-text-secondary mt-2">{t.pessoa_nome || 'Sem vínculo'}</p>
                 </div>
                 <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <span className={`text-[10px] font-bold px-2 py-1 rounded ${getPrioridadeColor(t.prioridade)}`}>{t.prioridade.toUpperCase()}</span>
-                  {t.prazo && <span className={`text-[10px] font-bold px-2 py-1 rounded ${prazoStatus?.color || 'bg-gray-100 text-gray-400'}`}>{formatDate(t.prazo)}</span>}
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${getPrioridadeColor(t.prioridade)}`}>{t.prioridade.toUpperCase()}</span>
+                  {t.prazo && <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${prazoStatus?.color || 'bg-gray-100 text-gray-400'}`}>{formatDate(t.prazo)}</span>}
                   <button onClick={() => onDeleteTarefa(t.id!)} className="p-2 text-error-expired hover:bg-error-expired/10 rounded"><Trash2 size={18} /></button>
                 </div>
               </div>

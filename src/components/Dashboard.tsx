@@ -45,7 +45,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const agendaHoje = useMemo(() => agenda.filter(a => a.data === todayStr), [agenda, todayStr])
 
   return (
-    <div className="p-8 h-full overflow-y-auto">
+    <div className="p-4 h-full overflow-y-auto">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <div className="text-sm text-text-secondary font-medium">
@@ -59,47 +59,47 @@ export const Dashboard: React.FC<DashboardProps> = ({
           {stats.vencidos > 0 && (
             <div className="bg-error-expired/10 border border-error-expired/20 p-4 rounded-xl flex items-center justify-between">
               <div className="flex items-center gap-3 text-error-expired">
-                <AlertCircle size={24} />
+                <AlertCircle size={18} />
                 <div>
                   <p className="font-bold">Atenção: {stats.vencidos} protocolo(s) vencido(s)!</p>
                   <p className="text-sm opacity-80">Existem processos que ultrapassaram o prazo final.</p>
                 </div>
               </div>
-              <button onClick={() => onNavigate('Protocolos')} className="text-xs font-bold bg-error-expired text-white px-4 py-2 rounded-lg hover:opacity-90">Ver Protocolos</button>
+              <button onClick={() => onNavigate('Protocolos')} className="text-xs font-bold bg-error-expired text-white px-3 py-2 rounded-lg hover:opacity-90">Ver Protocolos</button>
             </div>
           )}
           {stats.vencendo > 0 && (
             <div className="bg-deadline-alert/10 border border-deadline-alert/20 p-4 rounded-xl flex items-center justify-between">
               <div className="flex items-center gap-3 text-deadline-alert">
-                <Bell size={24} />
+                <Bell size={18} />
                 <div>
                   <p className="font-bold">Alerta: {stats.vencendo} protocolo(s) vencendo em breve.</p>
                   <p className="text-sm opacity-80">Prazos expirando nos próximos 3 dias.</p>
                 </div>
               </div>
-              <button onClick={() => onNavigate('Protocolos')} className="text-xs font-bold bg-deadline-alert text-white px-4 py-2 rounded-lg hover:opacity-90">Ver Protocolos</button>
+              <button onClick={() => onNavigate('Protocolos')} className="text-xs font-bold bg-deadline-alert text-white px-3 py-2 rounded-lg hover:opacity-90">Ver Protocolos</button>
             </div>
           )}
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[
           { label: 'Protocolos em aberto', value: stats.aberto, color: 'border-primary-btn' },
           { label: 'Prazos vencendo', value: stats.vencendo, color: 'border-deadline-alert' },
           { label: 'Prazos vencidos', value: stats.vencidos, color: 'border-error-expired' },
           { label: 'Concluídos no mês', value: stats.concluidos, color: 'border-success' },
         ].map((card, idx) => (
-          <div key={idx} className={`bg-surface-card p-6 rounded-xl shadow-sm border-l-4 ${card.color}`}>
+          <div key={idx} className={`bg-surface-card p-4 rounded-xl shadow-sm border-l-4 ${card.color}`}>
             <p className="text-text-secondary text-sm font-medium">{card.label}</p>
             <p className="text-3xl font-bold mt-2">{card.value}</p>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 space-y-8">
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
             <h3 className="font-bold mb-4 flex items-center gap-2"><Clock size={18} className="text-primary-btn" /> Protocolos Recentes</h3>
             <div className="overflow-hidden">
               <table className="w-full text-left text-sm">
@@ -128,7 +128,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
             <h3 className="font-bold mb-4 flex items-center gap-2"><CheckSquare size={18} className="text-primary-btn" /> Tarefas Urgentes</h3>
             {urgentes.length > 0 ? (
               <div className="space-y-3">
@@ -151,7 +151,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         <div className="space-y-8">
-          <div className="bg-sidebar-bg text-white p-6 rounded-xl shadow-lg">
+          <div className="bg-sidebar-bg text-white p-4 rounded-xl shadow-lg">
             <h3 className="font-bold mb-4 flex items-center gap-2"><Calendar size={18} className="text-active-highlight" /> Agenda de Hoje</h3>
             {agendaHoje.length > 0 ? (
               <div className="space-y-4">
