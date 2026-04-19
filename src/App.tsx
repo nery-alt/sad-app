@@ -35,7 +35,6 @@ import {
   FileDown,
   FileEdit
 } from 'lucide-react'
-import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from 'docx'
 
 declare global {
   interface Window {
@@ -46,6 +45,7 @@ declare global {
       selectFile: () => Promise<{ path: string, name: string, type: string } | null>;
       saveFileDialog: (payload: { defaultName: string, extensions: string[] }) => Promise<string | null>;
       writeFile: (payload: { filePath: string, buffer: ArrayBuffer }) => Promise<{ success: boolean, error?: string }>;
+      generateDocx: (payload: { filePath: string, data: any }) => Promise<{ success: boolean, error?: string }>;
       openFile: (filePath: string) => Promise<{ success: boolean, error?: string }>;
     }
   }
@@ -335,59 +335,27 @@ const App: React.FC = () => {
       const person = pessoas.find(p => p.id === docGeradoFormData.pessoa_id)
       const protocol = protocolos.find(pr => pr.id === docGeradoFormData.protocolo_id)
       
-      const doc = new Document({
-        sections: [{
-          properties: {},
-          children: [
-            new Paragraph({
-              text: `SAD - SOLUÇÃO ADMINISTRATIVA DIGITAL`,
-              heading: HeadingLevel.HEADING_1,
-              alignment: AlignmentType.CENTER,
-            }),
-            new Paragraph({
-              text: `${docGeradoFormData.tipo?.toUpperCase()}: ${docGeradoFormData.titulo}`,
-              heading: HeadingLevel.HEADING_2,
-              alignment: AlignmentType.CENTER,
-            }),
-            new Paragraph({ text: "" }),
-            new Paragraph({
-              children: [
-                new TextRun({ text: `INTERESSADO: `, bold: true }),
-                new TextRun({ text: person?.nome || "N/A" }),
-              ],
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({ text: `PROTOCOLO: `, bold: true }),
-                new TextRun({ text: protocol?.numero || "N/A" }),
-              ],
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({ text: `DATA: `, bold: true }),
-                new TextRun({ text: new Date().toLocaleDateString('pt-BR') }),
-              ],
-            }),
-            new Paragraph({ text: "" }),
-            new Paragraph({ text: "------------------------------------------------------------------------------------------------------------------------" }),
-            new Paragraph({ text: "" }),
-            ...docGeradoFormData.conteudo?.split('\n').map(line => new Paragraph({ text: line })) || [],
-          ],
-        }],
-      })
-
-      const buffer = await Packer.toBuffer(doc)
       const savePath = await window.electronAPI.saveFileDialog({
         defaultName: `${docGeradoFormData.tipo}_${docGeradoFormData.titulo.replace(/\s+/g, '_')}.docx`,
         extensions: ['docx']
       })
 
       if (savePath) {
-        const res = await window.electronAPI.writeFile({ filePath: savePath, buffer })
+        const res = await window.electronAPI.generateDocx({
+          filePath: savePath,
+          data: {
+            tipo: docGeradoFormData.tipo,
+            titulo: docGeradoFormData.titulo,
+            pessoa_nome: person?.nome,
+            protocolo_numero: protocol?.numero,
+            conteudo: docGeradoFormData.conteudo
+          }
+        })
+        
         if (res.success) {
           filePath = savePath
         } else {
-          alert('Erro ao salvar arquivo: ' + res.error)
+          alert('Erro ao gerar documento: ' + res.error)
           return
         }
       } else {
@@ -420,6 +388,17 @@ const App: React.FC = () => {
   }
 
   // Helpers
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '-'
+    try {
+      const date = new Date(dateStr)
+      if (isNaN(date.getTime())) return dateStr
+      return date.toLocaleDateString('pt-BR')
+    } catch {
+      return dateStr
+    }
+  }
+
   const getPrazoStatus = (prazo: string) => {
     if (!prazo) return null
     const today = new Date()
@@ -571,7 +550,7 @@ const App: React.FC = () => {
                       <div key={pr.id} onClick={() => { setSelectedProtocolo(pr); setActiveTab('Protocolos'); }} className="p-4 border border-gray-100 rounded-lg hover:border-primary-btn/30 cursor-pointer transition-all flex justify-between items-center">
                         <div>
                           <p className="font-bold text-sm">{pr.numero} - {pr.assunto}</p>
-                          <p className="text-xs text-text-secondary">Entrada: {pr.data_entrada}</p>
+                          <p className="text-xs text-text-secondary">Entrada: {formatDate(pr.data_entrada)}</p>
                         </div>
                         <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${pr.status === 'concluido' ? 'bg-success/10 text-success' : 'bg-primary-btn/10 text-primary-btn'}`}>
                           {pr.status.replace('_', ' ')}
@@ -602,7 +581,7 @@ const App: React.FC = () => {
                               {doc.protocolo_numero && <span className="text-[10px] bg-gray-100 text-text-secondary px-1.5 py-0.5 rounded font-bold">PROT: {doc.protocolo_numero}</span>}
                             </div>
                             <p className="text-xs text-text-secondary truncate">{doc.descricao || 'Sem descrição'}</p>
-                            <p className="text-[10px] text-text-secondary mt-1 uppercase font-bold">{doc.data_recebimento}</p>
+                            <p className="text-[10px] text-text-secondary mt-1 uppercase font-bold">{formatDate(doc.data_recebimento)}</p>
                           </div>
                           <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onClick={() => handleOpenFile(doc.caminho)} className="p-2 text-primary-btn hover:bg-primary-btn/10 rounded" title="Abrir Arquivo"><ExternalLink size={18} /></button>
@@ -631,7 +610,7 @@ const App: React.FC = () => {
                               <span className="text-[10px] bg-success/10 text-success px-1.5 py-0.5 rounded font-bold uppercase">{dg.tipo}</span>
                             </div>
                             <p className="text-xs text-text-secondary truncate">{dg.caminho ? 'Exportado' : 'Rascunho'}</p>
-                            <p className="text-[10px] text-text-secondary mt-1 uppercase font-bold">{dg.data_geracao}</p>
+                            <p className="text-[10px] text-text-secondary mt-1 uppercase font-bold">{formatDate(dg.data_geracao)}</p>
                           </div>
                           <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onClick={() => { setDocGeradoFormData(dg); setIsDocGeradoFormOpen(true); }} className="p-2 text-primary-btn hover:bg-primary-btn/10 rounded" title="Editar"><FileEdit size={18} /></button>
@@ -770,11 +749,11 @@ const App: React.FC = () => {
                 <div className="space-y-4">
                   <div>
                     <p className="text-xs text-text-secondary uppercase font-bold">Data de Entrada</p>
-                    <p className="font-medium">{selectedProtocolo.data_entrada}</p>
+                    <p className="font-medium">{formatDate(selectedProtocolo.data_entrada)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-text-secondary uppercase font-bold">Prazo Final</p>
-                    <p className={`font-bold text-lg ${pStatus?.color.split(' ')[0] || ''}`}>{selectedProtocolo.prazo || 'Sem prazo definido'}</p>
+                    <p className={`font-bold text-lg ${pStatus?.color.split(' ')[0] || ''}`}>{formatDate(selectedProtocolo.prazo) || 'Sem prazo definido'}</p>
                     {pStatus && <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded mt-1 inline-block ${pStatus.color}`}>{pStatus.label}</span>}
                   </div>
                 </div>
@@ -823,7 +802,7 @@ const App: React.FC = () => {
                       <td className="px-6 py-4 text-sm">{pr.pessoa_nome}</td>
                       <td className="px-6 py-4 text-sm font-medium">{pr.assunto}</td>
                       <td className="px-6 py-4">
-                        <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${pStatus?.color || 'bg-gray-100 text-gray-400'}`}>{pr.prazo || 'S/ PRAZO'}</span>
+                        <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${pStatus?.color || 'bg-gray-100 text-gray-400'}`}>{formatDate(pr.prazo) || 'S/ PRAZO'}</span>
                       </td>
                       <td className="px-6 py-4">
                         <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${pr.status === 'concluido' ? 'bg-success/10 text-success' : 'bg-primary-btn/10 text-primary-btn'}`}>{pr.status.replace('_', ' ')}</span>
@@ -879,7 +858,7 @@ const App: React.FC = () => {
                       if (p) { setSelectedPessoa(p); setActiveTab('Pessoas / Dossiês'); }
                     }}>{doc.pessoa_nome}</td>
                     <td className="px-6 py-4 text-xs font-bold text-text-secondary">{doc.protocolo_numero || '-'}</td>
-                    <td className="px-6 py-4 text-xs">{doc.data_recebimento}</td>
+                    <td className="px-6 py-4 text-xs">{formatDate(doc.data_recebimento)}</td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2">
                         <button onClick={() => handleOpenFile(doc.caminho)} className="p-2 text-primary-btn hover:bg-primary-btn/10 rounded" title="Abrir Arquivo"><ExternalLink size={16} /></button>

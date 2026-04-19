@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from 'docx'
 
 const Database = require('better-sqlite3')
 
@@ -176,6 +177,58 @@ ipcMain.handle('save-file-dialog', async (event, { defaultName, extensions }) =>
   
   if (result.canceled || !result.filePath) return null
   return result.filePath
+})
+
+ipcMain.handle('generate-docx', async (event, { filePath, data }) => {
+  try {
+    const doc = new Document({
+      sections: [{
+        properties: {},
+        children: [
+          new Paragraph({
+            text: `SAD - SOLUÇÃO ADMINISTRATIVA DIGITAL`,
+            heading: HeadingLevel.HEADING_1,
+            alignment: AlignmentType.CENTER,
+          }),
+          new Paragraph({
+            text: `${data.tipo.toUpperCase()}: ${data.titulo}`,
+            heading: HeadingLevel.HEADING_2,
+            alignment: AlignmentType.CENTER,
+          }),
+          new Paragraph({ text: "" }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: `INTERESSADO: `, bold: true }),
+              new TextRun({ text: data.pessoa_nome || "N/A" }),
+            ],
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: `PROTOCOLO: `, bold: true }),
+              new TextRun({ text: data.protocolo_numero || "N/A" }),
+            ],
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: `DATA: `, bold: true }),
+              new TextRun({ text: new Date().toLocaleDateString('pt-BR') }),
+            ],
+          }),
+          new Paragraph({ text: "" }),
+          new Paragraph({ text: "------------------------------------------------------------------------------------------------------------------------" }),
+          new Paragraph({ text: "" }),
+          ...data.conteudo.split('\n').map((line: string) => new Paragraph({ text: line })),
+        ],
+      }],
+    })
+
+    const buffer = await Packer.toBuffer(doc)
+    fs.writeFileSync(filePath, buffer)
+    return { success: true }
+  } catch (error: any) {
+    console.error('Generate DOCX Error:', error)
+    return { success: false, error: error.message }
+  }
 })
 
 ipcMain.handle('write-file', async (event, { filePath, buffer }) => {

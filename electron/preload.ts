@@ -7,5 +7,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectFile: () => ipcRenderer.invoke('select-file'),
   saveFileDialog: (payload: { defaultName: string, extensions: string[] }) => ipcRenderer.invoke('save-file-dialog', payload),
   writeFile: (payload: { filePath: string, buffer: ArrayBuffer }) => ipcRenderer.invoke('write-file', payload),
+  generateDocx: (payload: { filePath: string, data: any }) => ipcRenderer.invoke('generate-docx', payload),
   openFile: (filePath: string) => ipcRenderer.invoke('open-file', filePath),
 })
