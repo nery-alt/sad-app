@@ -1,0 +1,65 @@
+import React, { useState, useMemo } from 'react'
+import { Inbox, ExternalLink, Trash2, Search, Download } from 'lucide-react'
+import { DocumentoRecebido, Pessoa } from '../types'
+
+interface DocumentosRecebidosProps {
+  documentos: DocumentoRecebido[]
+  pessoas: Pessoa[]
+  onOpenFile: (path: string) => void
+  onDeleteDoc: (id: number) => void
+  onSelectPessoa: (pessoa: Pessoa) => void
+  onNavigate: (tab: string) => void
+  formatDate: (dateStr: string) => string
+}
+
+export const DocumentosRecebidos: React.FC<DocumentosRecebidosProps> = ({
+  documentos,
+  pessoas,
+  onOpenFile,
+  onDeleteDoc,
+  onSelectPessoa,
+  onNavigate,
+  formatDate,
+}) => {
+  const [searchDoc, setSearchDoc] = useState('')
+
+  const filteredDocs = useMemo(() => documentos.filter(d => 
+    d.nome.toLowerCase().includes(searchDoc.toLowerCase()) ||
+    d.pessoa_nome?.toLowerCase().includes(searchDoc.toLowerCase())
+  ), [documentos, searchDoc])
+
+  const getFileIcon = (type: string) => {
+    const t = type.toLowerCase()
+    if (['jpg', 'jpeg', 'png'].includes(t)) return '🖼️'
+    if (t === 'pdf') return '📄'
+    if (t === 'docx' || t === 'doc') return '📝'
+    return '📋'
+  }
+
+  return (
+    <div className="p-8 flex flex-col h-full overflow-hidden">
+      <div className="mb-8 shrink-0"><h1 className="text-2xl font-bold">Documentos Recebidos</h1><p className="text-text-secondary">Todos os arquivos importados do sistema.</p></div>
+      <div className="mb-6 relative shrink-0">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary" size={20} />
+        <input type="text" placeholder="Buscar por nome ou pessoa..." className="w-full pl-12 pr-4 py-3 bg-surface-card border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-btn/20" value={searchDoc} onChange={(e) => setSearchDoc(e.target.value)} />
+      </div>
+      <div className="flex-1 overflow-y-auto pr-2">
+        <div className="space-y-3">
+          {filteredDocs.map(doc => (
+            <div key={doc.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all flex items-center gap-4 group">
+              <div className="w-12 h-12 bg-surface-card rounded flex items-center justify-center shrink-0 text-2xl">{getFileIcon(doc.tipo)}</div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-sm">{doc.nome}</p>
+                <p className="text-xs text-text-secondary truncate">{doc.pessoa_nome} • {formatDate(doc.data_recebimento)}</p>
+              </div>
+              <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => onOpenFile(doc.caminho)} className="p-2 text-primary-btn hover:bg-primary-btn/10 rounded" title="Abrir"><ExternalLink size={18} /></button>
+                <button onClick={() => onDeleteDoc(doc.id!)} className="p-2 text-error-expired hover:bg-error-expired/10 rounded" title="Remover"><Trash2 size={18} /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
