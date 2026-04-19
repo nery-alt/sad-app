@@ -15,9 +15,9 @@ function initDatabase() {
     console.log('Database initialized at:', dbPath)
 
     db.exec(`
-      CREATE TABLE IF NOT EXISTS settings (
-        key TEXT PRIMARY KEY,
-        value TEXT
+      CREATE TABLE IF NOT EXISTS configuracoes (
+        chave TEXT PRIMARY KEY,
+        valor TEXT
       );
       
       CREATE TABLE IF NOT EXISTS pessoas (
@@ -208,14 +208,14 @@ ipcMain.handle('save-file-dialog', async (event, { defaultName, extensions }) =>
   return result.filePath
 })
 
-ipcMain.handle('generate-docx', async (event, { filePath, data }) => {
+ipcMain.handle('generate-docx', async (event, { filePath, data, config }) => {
   try {
     const doc = new Document({
       sections: [{
         properties: {},
         children: [
           new Paragraph({
-            text: `SAD - SOLUÇÃO ADMINISTRATIVA DIGITAL`,
+            text: config.nomeSetor || "SAD - SOLUÇÃO ADMINISTRATIVA DIGITAL",
             heading: HeadingLevel.HEADING_1,
             alignment: AlignmentType.CENTER,
           }),
@@ -240,13 +240,27 @@ ipcMain.handle('generate-docx', async (event, { filePath, data }) => {
           new Paragraph({
             children: [
               new TextRun({ text: `DATA: `, bold: true }),
-              new TextRun({ text: new Date().toLocaleDateString('pt-BR') }),
+              new TextRun({ text: `${config.cidade || "Cidade"}/${config.uf || "UF"}, ${new Date().toLocaleDateString('pt-BR')}` }),
             ],
           }),
           new Paragraph({ text: "" }),
           new Paragraph({ text: "------------------------------------------------------------------------------------------------------------------------" }),
           new Paragraph({ text: "" }),
           ...data.conteudo.split('\n').map((line: string) => new Paragraph({ text: line })),
+          new Paragraph({ text: "" }),
+          new Paragraph({ text: "" }),
+          new Paragraph({
+            text: "________________________________________________",
+            alignment: AlignmentType.CENTER,
+          }),
+          new Paragraph({
+            text: config.assinaturaPadrao || config.nomeUsuario || "Assinatura",
+            alignment: AlignmentType.CENTER,
+          }),
+          new Paragraph({
+            text: config.cargo || "",
+            alignment: AlignmentType.CENTER,
+          }),
         ],
       }],
     })

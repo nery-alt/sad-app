@@ -37,7 +37,9 @@ import {
   CheckCircle,
   Circle,
   Flag,
-  Bell
+  Bell,
+  Upload,
+  Briefcase
 } from 'lucide-react'
 
 declare global {
@@ -49,7 +51,7 @@ declare global {
       selectFile: () => Promise<{ path: string, name: string, type: string } | null>;
       saveFileDialog: (payload: { defaultName: string, extensions: string[] }) => Promise<string | null>;
       writeFile: (payload: { filePath: string, buffer: ArrayBuffer }) => Promise<{ success: boolean, error?: string }>;
-      generateDocx: (payload: { filePath: string, data: any }) => Promise<{ success: boolean, error?: string }>;
+      generateDocx: (payload: { filePath: string, data: any, config: any }) => Promise<{ success: boolean, error?: string }>;
       openFile: (filePath: string) => Promise<{ success: boolean, error?: string }>;
     }
   }
@@ -145,6 +147,16 @@ interface AgendaItem {
   protocolo_numero?: string;
 }
 
+interface Config {
+  nomeUsuario: string;
+  nomeSetor: string;
+  cargo: string;
+  logomarca: string;
+  assinaturaPadrao: string;
+  cidade: string;
+  uf: string;
+}
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('Dashboard')
   const [isOnline, setIsOnline] = useState(navigator.onLine)
@@ -199,6 +211,14 @@ const App: React.FC = () => {
     titulo: '', descricao: '', data: new Date().toISOString().split('T')[0], horario: '', realizado: 0
   })
 
+  // Estados Configurações
+  const [config, setConfig] = useState<Config>({
+    nomeUsuario: '', nomeSetor: '', cargo: '', logomarca: '', assinaturaPadrao: '', cidade: '', uf: ''
+  })
+
+  // Estados Busca Global
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('')
+
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)
     const handleOffline = () => setIsOnline(false)
@@ -206,6 +226,7 @@ const App: React.FC = () => {
     window.addEventListener('offline', handleOffline)
     
     fetchData()
+    fetchConfig()
 
     return () => {
       window.removeEventListener('online', handleOnline)
@@ -260,6 +281,19 @@ const App: React.FC = () => {
             ORDER BY a.data ASC, a.horario ASC`
     })
     if (resAgenda.success && resAgenda.data) setAgenda(resAgenda.data)
+  }
+
+  const fetchConfig = async () => {
+    const res = await window.electronAPI.dbQuery({ sql: 'SELECT * FROM configuracoes' })
+    if (res.success && res.data) {
+      const newConfig = { ...config }
+      res.data.forEach((item: any) => {
+        if (item.chave in newConfig) {
+          (newConfig as any)[item.chave] = item.valor
+        }
+      })
+      setConfig(newConfig)
+    }
   }
 
   // Handlers Pessoas
@@ -415,7 +449,8 @@ const App: React.FC = () => {
             pessoa_nome: person?.nome,
             protocolo_numero: protocol?.numero,
             conteudo: docGeradoFormData.conteudo
-          }
+          },
+          config: config
         })
         
         if (res.success) {
@@ -523,6 +558,26 @@ const App: React.FC = () => {
     }
   }
 
+  // Handlers Configurações
+  const handleSaveConfig = async (e: React.FormEvent) => {
+    e.preventDefault()
+    for (const [chave, valor] of Object.entries(config)) {
+      await window.electronAPI.dbRun({
+        sql: 'INSERT OR REPLACE INTO configuracoes (chave, valor) VALUES (?, ?)',
+        params: [chave, valor]
+      })
+    }
+    alert('Configurações salvas com sucesso!')
+    fetchConfig()
+  }
+
+  const handleUploadLogo = async () => {
+    const file = await window.electronAPI.selectFile()
+    if (file) {
+      setConfig({ ...config, logomarca: file.path })
+    }
+  }
+
   // Helpers
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '-'
@@ -584,6 +639,19 @@ const App: React.FC = () => {
     t.titulo.toLowerCase().includes(searchTarefa.toLowerCase()) || 
     t.descricao?.toLowerCase().includes(searchTarefa.toLowerCase())
   ), [tarefas, searchTarefa])
+
+  const globalSearchResults = useMemo(() => {
+    if (globalSearchQuery.length < 3) return null
+    const q = globalSearchQuery.toLowerCase()
+    return {
+      pessoas: pessoas.filter(p => p.nome.toLowerCase().includes(q) || p.orgao?.toLowerCase().includes(q) || p.cpf?.includes(q)),
+      protocolos: protocolos.filter(pr => pr.numero.toLowerCase().includes(q) || pr.assunto.toLowerCase().includes(q) || pr.pessoa_nome?.toLowerCase().includes(q)),
+      documentosRecebidos: documentos.filter(d => d.nome.toLowerCase().includes(q) || d.descricao?.toLowerCase().includes(q) || d.pessoa_nome?.toLowerCase().includes(q)),
+      documentosGerados: documentosGerados.filter(dg => dg.titulo.toLowerCase().includes(q) || dg.tipo.toLowerCase().includes(q) || dg.pessoa_nome?.toLowerCase().includes(q)),
+      tarefas: tarefas.filter(t => t.titulo.toLowerCase().includes(q) || t.descricao?.toLowerCase().includes(q)),
+      agenda: agenda.filter(a => a.titulo.toLowerCase().includes(q) || a.descricao?.toLowerCase().includes(q))
+    }
+  }, [globalSearchQuery, pessoas, protocolos, documentos, documentosGerados, tarefas, agenda])
 
   const pessoaProtocolos = useMemo(() => {
     if (!selectedPessoa) return []
@@ -1291,6 +1359,206 @@ const App: React.FC = () => {
     )
   }
 
+  const renderBuscaGlobal = () => {
+    return (
+      <div className="p-8 flex flex-col h-full overflow-hidden">
+        <div className="mb-8 shrink-0">
+          <h1 className="text-2xl font-bold text-text-main">Busca Global</h1>
+          <p className="text-text-secondary">Pesquise em todo o sistema por pessoas, protocolos, documentos e tarefas.</p>
+        </div>
+        <div className="mb-8 relative shrink-0">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary" size={24} />
+          <input 
+            type="text" 
+            placeholder="Digite pelo menos 3 caracteres para buscar..." 
+            className="w-full pl-14 pr-4 py-4 bg-white border border-gray-200 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-btn/20 text-lg transition-all" 
+            value={globalSearchQuery} 
+            onChange={(e) => setGlobalSearchQuery(e.target.value)}
+            autoFocus
+          />
+        </div>
+        <div className="flex-1 overflow-y-auto pr-2 space-y-8">
+          {globalSearchResults ? (
+            <>
+              {/* Pessoas */}
+              {globalSearchResults.pessoas.length > 0 && (
+                <section>
+                  <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <Users size={16} /> Pessoas ({globalSearchResults.pessoas.length})
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {globalSearchResults.pessoas.map(p => (
+                      <div key={p.id} onClick={() => { setSelectedPessoa(p); setActiveTab('Pessoas / Dossiês'); }} className="bg-white p-4 rounded-xl border border-gray-100 hover:border-primary-btn/30 cursor-pointer transition-all flex items-center gap-4">
+                        <div className="w-10 h-10 bg-surface-card rounded-full flex items-center justify-center text-primary-btn"><User size={20} /></div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-sm truncate">{p.nome}</p>
+                          <p className="text-xs text-text-secondary truncate">{p.orgao || 'Sem órgão'}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Protocolos */}
+              {globalSearchResults.protocolos.length > 0 && (
+                <section>
+                  <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <FileText size={16} /> Protocolos ({globalSearchResults.protocolos.length})
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {globalSearchResults.protocolos.map(pr => (
+                      <div key={pr.id} onClick={() => { setSelectedProtocolo(pr); setActiveTab('Protocolos'); }} className="bg-white p-4 rounded-xl border border-gray-100 hover:border-primary-btn/30 cursor-pointer transition-all flex items-center gap-4">
+                        <div className="w-10 h-10 bg-primary-btn/10 rounded-lg flex items-center justify-center text-primary-btn font-bold text-xs">PR</div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-sm truncate">{pr.numero} - {pr.assunto}</p>
+                          <p className="text-xs text-text-secondary truncate">{pr.pessoa_nome}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Documentos Recebidos */}
+              {globalSearchResults.documentosRecebidos.length > 0 && (
+                <section>
+                  <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <Inbox size={16} /> Documentos Recebidos ({globalSearchResults.documentosRecebidos.length})
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {globalSearchResults.documentosRecebidos.map(d => (
+                      <div key={d.id} onClick={() => { const p = pessoas.find(p => p.id === d.pessoa_id); if(p) { setSelectedPessoa(p); setActiveTab('Pessoas / Dossiês'); } }} className="bg-white p-4 rounded-xl border border-gray-100 hover:border-primary-btn/30 cursor-pointer transition-all flex items-center gap-4">
+                        <div className="w-10 h-10 bg-surface-card rounded flex items-center justify-center">{getFileIcon(d.tipo)}</div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-sm truncate">{d.nome}</p>
+                          <p className="text-xs text-text-secondary truncate">{d.pessoa_nome}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Documentos Gerados */}
+              {globalSearchResults.documentosGerados.length > 0 && (
+                <section>
+                  <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <FilePlus size={16} /> Documentos Gerados ({globalSearchResults.documentosGerados.length})
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {globalSearchResults.documentosGerados.map(dg => (
+                      <div key={dg.id} onClick={() => { const p = pessoas.find(p => p.id === dg.pessoa_id); if(p) { setSelectedPessoa(p); setActiveTab('Pessoas / Dossiês'); } }} className="bg-white p-4 rounded-xl border border-gray-100 hover:border-primary-btn/30 cursor-pointer transition-all flex items-center gap-4">
+                        <div className="w-10 h-10 bg-success/10 rounded flex items-center justify-center text-success"><FileText size={20} /></div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-sm truncate">{dg.titulo}</p>
+                          <p className="text-xs text-text-secondary truncate">{dg.pessoa_nome} • {dg.tipo.toUpperCase()}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Tarefas */}
+              {globalSearchResults.tarefas.length > 0 && (
+                <section>
+                  <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <CheckSquare size={16} /> Tarefas ({globalSearchResults.tarefas.length})
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {globalSearchResults.tarefas.map(t => (
+                      <div key={t.id} onClick={() => setActiveTab('Tarefas')} className="bg-white p-4 rounded-xl border border-gray-100 hover:border-primary-btn/30 cursor-pointer transition-all flex items-center gap-4">
+                        <div className="w-10 h-10 bg-surface-card rounded flex items-center justify-center text-text-secondary"><CheckCircle size={20} /></div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-sm truncate">{t.titulo}</p>
+                          <p className="text-xs text-text-secondary truncate">{t.status.toUpperCase()} • {t.prioridade.toUpperCase()}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {Object.values(globalSearchResults).every(arr => arr.length === 0) && (
+                <div className="py-20 text-center">
+                  <Search size={48} className="mx-auto text-gray-200 mb-4" />
+                  <p className="text-text-secondary">Nenhum resultado encontrado para "{globalSearchQuery}".</p>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="py-20 text-center opacity-30">
+              <Search size={64} className="mx-auto mb-4" />
+              <p className="text-lg font-medium">Digite para pesquisar em todo o sistema</p>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const renderConfiguracoes = () => {
+    return (
+      <div className="p-8 flex flex-col h-full overflow-y-auto">
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-text-main">Configurações</h1>
+          <p className="text-text-secondary">Personalize os dados do sistema e dos documentos gerados.</p>
+        </div>
+        <form onSubmit={handleSaveConfig} className="max-w-3xl space-y-8">
+          <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm space-y-6">
+            <h3 className="font-bold text-sidebar-bg flex items-center gap-2 border-b border-gray-50 pb-4"><User size={20} /> Dados do Usuário</h3>
+            <div className="grid grid-cols-2 gap-6">
+              <div className="col-span-2">
+                <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Nome Completo</label>
+                <input className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none" value={config.nomeUsuario} onChange={e => setConfig({...config, nomeUsuario: e.target.value})} placeholder="Ex: João da Silva" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Cargo</label>
+                <input className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none" value={config.cargo} onChange={e => setConfig({...config, cargo: e.target.value})} placeholder="Ex: Diretor Administrativo" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Assinatura Padrão</label>
+                <input className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none" value={config.assinaturaPadrao} onChange={e => setConfig({...config, assinaturaPadrao: e.target.value})} placeholder="Ex: João da Silva - Diretor" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm space-y-6">
+            <h3 className="font-bold text-sidebar-bg flex items-center gap-2 border-b border-gray-50 pb-4"><Building2 size={20} /> Dados Institucionais</h3>
+            <div className="grid grid-cols-2 gap-6">
+              <div className="col-span-2">
+                <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Nome do Setor / Órgão</label>
+                <input className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none" value={config.nomeSetor} onChange={e => setConfig({...config, nomeSetor: e.target.value})} placeholder="Ex: Secretaria de Administração" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Cidade</label>
+                <input className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none" value={config.cidade} onChange={e => setConfig({...config, cidade: e.target.value})} placeholder="Ex: Brasília" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-text-secondary uppercase mb-1">UF</label>
+                <input className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none" value={config.uf} onChange={e => setConfig({...config, uf: e.target.value})} placeholder="Ex: DF" />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Logomarca</label>
+                <div className="flex items-center gap-4">
+                  <div className="w-20 h-20 bg-surface-card border border-dashed border-gray-300 rounded-lg flex items-center justify-center overflow-hidden">
+                    {config.logomarca ? <img src={`file://${config.logomarca}`} className="w-full h-full object-contain" alt="Logo" /> : <ImageIcon className="text-gray-300" size={32} />}
+                  </div>
+                  <button type="button" onClick={handleUploadLogo} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-text-main rounded-lg hover:bg-gray-200 transition-colors text-sm font-bold"><Upload size={16} /> Alterar Logo</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button type="submit" className="flex items-center gap-2 px-10 py-4 bg-primary-btn text-white rounded-xl font-bold hover:opacity-90 shadow-lg transition-all"><Save size={20} /> Salvar Configurações</button>
+          </div>
+        </form>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-screen w-full overflow-hidden font-sans">
       <aside className="w-64 bg-sidebar-bg text-white flex flex-col shrink-0">
@@ -1325,7 +1593,9 @@ const App: React.FC = () => {
           {activeTab === 'Documentos Gerados' && renderDocumentosGeradosGlobal()}
           {activeTab === 'Tarefas' && renderTarefas()}
           {activeTab === 'Agenda' && renderAgenda()}
-          {!['Dashboard', 'Pessoas / Dossiês', 'Protocolos', 'Documentos Recebidos', 'Documentos Gerados', 'Tarefas', 'Agenda'].includes(activeTab) && (
+          {activeTab === 'Busca Global' && renderBuscaGlobal()}
+          {activeTab === 'Configurações' && renderConfiguracoes()}
+          {!['Dashboard', 'Pessoas / Dossiês', 'Protocolos', 'Documentos Recebidos', 'Documentos Gerados', 'Tarefas', 'Agenda', 'Busca Global', 'Configurações'].includes(activeTab) && (
             <div className="p-8 flex items-center justify-center h-full"><p className="text-text-secondary text-lg">Seção {activeTab} em desenvolvimento.</p></div>
           )}
         </div>
