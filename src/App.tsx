@@ -33,7 +33,11 @@ import {
   Download,
   Save,
   FileDown,
-  FileEdit
+  FileEdit,
+  CheckCircle,
+  Circle,
+  Flag,
+  Bell
 } from 'lucide-react'
 
 declare global {
@@ -112,6 +116,35 @@ interface DocumentoGerado {
   protocolo_numero?: string;
 }
 
+interface Tarefa {
+  id?: number;
+  titulo: string;
+  descricao: string;
+  prioridade: 'baixa' | 'media' | 'alta';
+  prazo: string;
+  status: 'pendente' | 'em_andamento' | 'concluida' | 'arquivada';
+  pessoa_id?: number;
+  protocolo_id?: number;
+  criado_em: string;
+  atualizado_em: string;
+  pessoa_nome?: string;
+  protocolo_numero?: string;
+}
+
+interface AgendaItem {
+  id?: number;
+  titulo: string;
+  descricao: string;
+  data: string;
+  horario: string;
+  pessoa_id?: number;
+  protocolo_id?: number;
+  realizado: number;
+  criado_em: string;
+  pessoa_nome?: string;
+  protocolo_numero?: string;
+}
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('Dashboard')
   const [isOnline, setIsOnline] = useState(navigator.onLine)
@@ -149,6 +182,21 @@ const App: React.FC = () => {
   const [isDocGeradoFormOpen, setIsDocGeradoFormOpen] = useState(false)
   const [docGeradoFormData, setDocGeradoFormData] = useState<Partial<DocumentoGerado>>({
     pessoa_id: 0, protocolo_id: undefined, tipo: 'ofício', titulo: '', conteudo: '', data_geracao: new Date().toISOString().split('T')[0]
+  })
+
+  // Estados Tarefas
+  const [tarefas, setTarefas] = useState<Tarefa[]>([])
+  const [searchTarefa, setSearchTarefa] = useState('')
+  const [isTarefaFormOpen, setIsTarefaFormOpen] = useState(false)
+  const [tarefaFormData, setTarefaFormData] = useState<Partial<Tarefa>>({
+    titulo: '', descricao: '', prioridade: 'media', prazo: '', status: 'pendente'
+  })
+
+  // Estados Agenda
+  const [agenda, setAgenda] = useState<AgendaItem[]>([])
+  const [isAgendaFormOpen, setIsAgendaFormOpen] = useState(false)
+  const [agendaFormData, setAgendaFormData] = useState<Partial<AgendaItem>>({
+    titulo: '', descricao: '', data: new Date().toISOString().split('T')[0], horario: '', realizado: 0
   })
 
   useEffect(() => {
@@ -194,6 +242,24 @@ const App: React.FC = () => {
             ORDER BY dg.criado_em DESC`
     })
     if (resDocsG.success && resDocsG.data) setDocumentosGerados(resDocsG.data)
+
+    const resTarefas = await window.electronAPI.dbQuery({
+      sql: `SELECT t.*, p.nome as pessoa_nome, pr.numero as protocolo_numero 
+            FROM tarefas t 
+            LEFT JOIN pessoas p ON t.pessoa_id = p.id 
+            LEFT JOIN protocolos pr ON t.protocolo_id = pr.id 
+            ORDER BY t.prazo ASC, t.prioridade DESC`
+    })
+    if (resTarefas.success && resTarefas.data) setTarefas(resTarefas.data)
+
+    const resAgenda = await window.electronAPI.dbQuery({
+      sql: `SELECT a.*, p.nome as pessoa_nome, pr.numero as protocolo_numero 
+            FROM agenda a 
+            LEFT JOIN pessoas p ON a.pessoa_id = p.id 
+            LEFT JOIN protocolos pr ON a.protocolo_id = pr.id 
+            ORDER BY a.data ASC, a.horario ASC`
+    })
+    if (resAgenda.success && resAgenda.data) setAgenda(resAgenda.data)
   }
 
   // Handlers Pessoas
@@ -387,6 +453,76 @@ const App: React.FC = () => {
     }
   }
 
+  // Handlers Tarefas
+  const handleSaveTarefa = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const now = new Date().toISOString()
+    if (tarefaFormData.id) {
+      await window.electronAPI.dbRun({
+        sql: `UPDATE tarefas SET titulo=?, descricao=?, prioridade=?, prazo=?, status=?, pessoa_id=?, protocolo_id=?, atualizado_em=? WHERE id=?`,
+        params: [tarefaFormData.titulo, tarefaFormData.descricao, tarefaFormData.prioridade, tarefaFormData.prazo, tarefaFormData.status, tarefaFormData.pessoa_id || null, tarefaFormData.protocolo_id || null, now, tarefaFormData.id]
+      })
+    } else {
+      await window.electronAPI.dbRun({
+        sql: `INSERT INTO tarefas (titulo, descricao, prioridade, prazo, status, pessoa_id, protocolo_id, criado_em, atualizado_em) VALUES (?,?,?,?,?,?,?,?,?)`,
+        params: [tarefaFormData.titulo, tarefaFormData.descricao, tarefaFormData.prioridade, tarefaFormData.prazo, tarefaFormData.status, tarefaFormData.pessoa_id || null, tarefaFormData.protocolo_id || null, now, now]
+      })
+    }
+    setIsTarefaFormOpen(false)
+    fetchData()
+  }
+
+  const toggleTarefaStatus = async (tarefa: Tarefa) => {
+    const newStatus = tarefa.status === 'concluida' ? 'pendente' : 'concluida'
+    await window.electronAPI.dbRun({
+      sql: `UPDATE tarefas SET status = ?, atualizado_em = ? WHERE id = ?`,
+      params: [newStatus, new Date().toISOString(), tarefa.id]
+    })
+    fetchData()
+  }
+
+  const handleDeleteTarefa = async (id: number) => {
+    if (confirm('Excluir esta tarefa?')) {
+      await window.electronAPI.dbRun({ sql: 'DELETE FROM tarefas WHERE id = ?', params: [id] })
+      fetchData()
+    }
+  }
+
+  // Handlers Agenda
+  const handleSaveAgenda = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const now = new Date().toISOString()
+    if (agendaFormData.id) {
+      await window.electronAPI.dbRun({
+        sql: `UPDATE agenda SET titulo=?, descricao=?, data=?, horario=?, pessoa_id=?, protocolo_id=?, realizado=? WHERE id=?`,
+        params: [agendaFormData.titulo, agendaFormData.descricao, agendaFormData.data, agendaFormData.horario, agendaFormData.pessoa_id || null, agendaFormData.protocolo_id || null, agendaFormData.realizado, agendaFormData.id]
+      })
+    } else {
+      await window.electronAPI.dbRun({
+        sql: `INSERT INTO agenda (titulo, descricao, data, horario, pessoa_id, protocolo_id, realizado, criado_em) VALUES (?,?,?,?,?,?,?,?)`,
+        params: [agendaFormData.titulo, agendaFormData.descricao, agendaFormData.data, agendaFormData.horario, agendaFormData.pessoa_id || null, agendaFormData.protocolo_id || null, agendaFormData.realizado, now]
+      })
+    }
+    setIsAgendaFormOpen(false)
+    fetchData()
+  }
+
+  const toggleAgendaRealizado = async (item: AgendaItem) => {
+    const newVal = item.realizado === 1 ? 0 : 1
+    await window.electronAPI.dbRun({
+      sql: `UPDATE agenda SET realizado = ? WHERE id = ?`,
+      params: [newVal, item.id]
+    })
+    fetchData()
+  }
+
+  const handleDeleteAgenda = async (id: number) => {
+    if (confirm('Excluir este compromisso?')) {
+      await window.electronAPI.dbRun({ sql: 'DELETE FROM agenda WHERE id = ?', params: [id] })
+      fetchData()
+    }
+  }
+
   // Helpers
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '-'
@@ -402,7 +538,9 @@ const App: React.FC = () => {
   const getPrazoStatus = (prazo: string) => {
     if (!prazo) return null
     const today = new Date()
+    today.setHours(0, 0, 0, 0)
     const deadline = new Date(prazo)
+    deadline.setHours(0, 0, 0, 0)
     const diffTime = deadline.getTime() - today.getTime()
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
     
@@ -442,6 +580,11 @@ const App: React.FC = () => {
     dg.tipo.toLowerCase().includes(searchDocGerado.toLowerCase())
   ), [documentosGerados, searchDocGerado])
 
+  const filteredTarefas = useMemo(() => tarefas.filter(t => 
+    t.titulo.toLowerCase().includes(searchTarefa.toLowerCase()) || 
+    t.descricao?.toLowerCase().includes(searchTarefa.toLowerCase())
+  ), [tarefas, searchTarefa])
+
   const pessoaProtocolos = useMemo(() => {
     if (!selectedPessoa) return []
     return protocolos.filter(pr => pr.pessoa_id === selectedPessoa.id)
@@ -471,6 +614,9 @@ const App: React.FC = () => {
 
   // Renderers
   const renderDashboard = () => {
+    const now = new Date()
+    const todayStr = now.toISOString().split('T')[0]
+    
     const stats = {
       aberto: protocolos.filter(p => p.status === 'aberto' || p.status === 'em_andamento').length,
       vencendo: protocolos.filter(p => {
@@ -483,26 +629,142 @@ const App: React.FC = () => {
       }).length,
       concluidos: protocolos.filter(p => {
         const d = new Date(p.atualizado_em)
-        const now = new Date()
         return p.status === 'concluido' && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
       }).length
     }
 
+    const recentes = protocolos.slice(0, 5)
+    const urgentes = tarefas.filter(t => t.status !== 'concluida').slice(0, 5)
+    const agendaHoje = agenda.filter(a => a.data === todayStr)
+
     return (
-      <div className="p-8">
-        <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="p-8 h-full overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <div className="text-sm text-text-secondary font-medium">{new Date().toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+        </div>
+
+        {/* Alertas */}
+        {(stats.vencidos > 0 || stats.vencendo > 0) && (
+          <div className="mb-8 space-y-3">
+            {stats.vencidos > 0 && (
+              <div className="bg-error-expired/10 border border-error-expired/20 p-4 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-3 text-error-expired">
+                  <AlertCircle size={24} />
+                  <div>
+                    <p className="font-bold">Atenção: {stats.vencidos} protocolo(s) vencido(s)!</p>
+                    <p className="text-sm opacity-80">Existem processos que ultrapassaram o prazo final.</p>
+                  </div>
+                </div>
+                <button onClick={() => setActiveTab('Protocolos')} className="text-xs font-bold bg-error-expired text-white px-4 py-2 rounded-lg hover:opacity-90">Ver Protocolos</button>
+              </div>
+            )}
+            {stats.vencendo > 0 && (
+              <div className="bg-deadline-alert/10 border border-deadline-alert/20 p-4 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-3 text-deadline-alert">
+                  <Bell size={24} />
+                  <div>
+                    <p className="font-bold">Alerta: {stats.vencendo} protocolo(s) vencendo em breve.</p>
+                    <p className="text-sm opacity-80">Prazos expirando nos próximos 3 dias.</p>
+                  </div>
+                </div>
+                <button onClick={() => setActiveTab('Protocolos')} className="text-xs font-bold bg-deadline-alert text-white px-4 py-2 rounded-lg hover:opacity-90">Ver Protocolos</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {[
             { label: 'Protocolos em aberto', value: stats.aberto, color: 'border-primary-btn' },
             { label: 'Prazos vencendo', value: stats.vencendo, color: 'border-deadline-alert' },
             { label: 'Prazos vencidos', value: stats.vencidos, color: 'border-error-expired' },
             { label: 'Concluídos no mês', value: stats.concluidos, color: 'border-success' },
           ].map((card, idx) => (
-            <div key={idx} className={`bg-surface-card p-6 rounded-lg shadow-sm border-l-4 ${card.color}`}>
+            <div key={idx} className={`bg-surface-card p-6 rounded-xl shadow-sm border-l-4 ${card.color}`}>
               <p className="text-text-secondary text-sm font-medium">{card.label}</p>
               <p className="text-3xl font-bold mt-2">{card.value}</p>
             </div>
           ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 space-y-8">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+              <h3 className="font-bold mb-4 flex items-center gap-2"><Clock size={18} className="text-primary-btn" /> Protocolos Recentes</h3>
+              <div className="overflow-hidden">
+                <table className="w-full text-left text-sm">
+                  <thead className="text-xs text-text-secondary uppercase font-bold border-b border-gray-50">
+                    <tr>
+                      <th className="pb-3">Número</th>
+                      <th className="pb-3">Pessoa</th>
+                      <th className="pb-3">Prazo</th>
+                      <th className="pb-3 text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {recentes.map(pr => {
+                      const pStatus = getPrazoStatus(pr.prazo)
+                      return (
+                        <tr key={pr.id} onClick={() => { setSelectedProtocolo(pr); setActiveTab('Protocolos'); }} className="hover:bg-gray-50 cursor-pointer transition-colors">
+                          <td className="py-3 font-bold text-primary-btn">{pr.numero}</td>
+                          <td className="py-3 truncate max-w-[150px]">{pr.pessoa_nome}</td>
+                          <td className="py-3"><span className={`text-[10px] font-bold px-2 py-0.5 rounded ${pStatus?.color || 'bg-gray-100 text-gray-400'}`}>{formatDate(pr.prazo)}</span></td>
+                          <td className="py-3 text-right"><span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${pr.status === 'concluido' ? 'bg-success/10 text-success' : 'bg-primary-btn/10 text-primary-btn'}`}>{pr.status.replace('_', ' ')}</span></td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+              <h3 className="font-bold mb-4 flex items-center gap-2"><CheckSquare size={18} className="text-primary-btn" /> Tarefas Urgentes</h3>
+              {urgentes.length > 0 ? (
+                <div className="space-y-3">
+                  {urgentes.map(t => (
+                    <div key={t.id} className="flex items-center justify-between p-3 border border-gray-50 rounded-lg hover:border-primary-btn/20 transition-all">
+                      <div className="flex items-center gap-3">
+                        <button onClick={() => toggleTarefaStatus(t)} className="text-text-secondary hover:text-success transition-colors">
+                          {t.status === 'concluida' ? <CheckCircle className="text-success" size={20} /> : <Circle size={20} />}
+                        </button>
+                        <div>
+                          <p className="font-bold text-sm">{t.titulo}</p>
+                          <p className="text-xs text-text-secondary">{formatDate(t.prazo)} • {t.prioridade.toUpperCase()}</p>
+                        </div>
+                      </div>
+                      <Flag size={16} className={t.prioridade === 'alta' ? 'text-error-expired' : t.prioridade === 'media' ? 'text-deadline-alert' : 'text-success'} />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-8 text-center border-2 border-dashed border-gray-100 rounded-lg"><p className="text-text-secondary italic">Nenhuma tarefa pendente.</p></div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-8">
+            <div className="bg-sidebar-bg text-white p-6 rounded-xl shadow-lg">
+              <h3 className="font-bold mb-4 flex items-center gap-2"><Calendar size={18} className="text-active-highlight" /> Agenda de Hoje</h3>
+              {agendaHoje.length > 0 ? (
+                <div className="space-y-4">
+                  {agendaHoje.map(a => (
+                    <div key={a.id} className="flex gap-3 items-start border-l-2 border-active-highlight pl-3">
+                      <div className="shrink-0 font-bold text-active-highlight text-sm">{a.horario || '--:--'}</div>
+                      <div>
+                        <p className="font-bold text-sm">{a.titulo}</p>
+                        <p className="text-xs text-white/60 truncate">{a.pessoa_nome || 'Sem vínculo'}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-8 text-center opacity-40"><p className="text-sm italic">Nenhum compromisso para hoje.</p></div>
+              )}
+              <button onClick={() => setActiveTab('Agenda')} className="w-full mt-6 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-bold transition-colors">Ver Agenda Completa</button>
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -936,6 +1198,99 @@ const App: React.FC = () => {
     )
   }
 
+  const renderTarefas = () => {
+    return (
+      <div className="p-8 flex flex-col h-full overflow-hidden">
+        <div className="flex justify-between items-center mb-8 shrink-0">
+          <div><h1 className="text-2xl font-bold text-text-main">Tarefas</h1><p className="text-text-secondary">Organize suas atividades e prioridades.</p></div>
+          <button onClick={() => { setTarefaFormData({ titulo: '', descricao: '', prioridade: 'media', prazo: '', status: 'pendente' }); setIsTarefaFormOpen(true); }} className="flex items-center gap-2 bg-primary-btn text-white px-6 py-3 rounded-lg font-bold hover:opacity-90 transition-opacity shadow-md"><Plus size={20} /> Nova Tarefa</button>
+        </div>
+        <div className="mb-6 relative shrink-0">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary" size={20} />
+          <input type="text" placeholder="Buscar tarefas..." className="w-full pl-12 pr-4 py-3 bg-surface-card border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-btn/20 transition-all" value={searchTarefa} onChange={(e) => setSearchTarefa(e.target.value)} />
+        </div>
+        <div className="flex-1 overflow-y-auto pr-2">
+          <div className="grid grid-cols-1 gap-4">
+            {filteredTarefas.map(t => {
+              const pStatus = getPrazoStatus(t.prazo)
+              return (
+                <div key={t.id} className={`bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-primary-btn/20 transition-all ${t.status === 'concluida' ? 'opacity-60' : ''}`}>
+                  <div className="flex items-center gap-4 flex-1">
+                    <button onClick={() => toggleTarefaStatus(t)} className="text-text-secondary hover:text-success transition-colors shrink-0">
+                      {t.status === 'concluida' ? <CheckCircle className="text-success" size={24} /> : <Circle size={24} />}
+                    </button>
+                    <div className="min-w-0">
+                      <h3 className={`font-bold text-text-main ${t.status === 'concluida' ? 'line-through' : ''}`}>{t.titulo}</h3>
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${t.prioridade === 'alta' ? 'bg-error-expired/10 text-error-expired' : t.prioridade === 'media' ? 'bg-deadline-alert/10 text-deadline-alert' : 'bg-success/10 text-success'}`}>{t.prioridade}</span>
+                        {t.prazo && <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${pStatus?.color || 'bg-gray-100 text-gray-400'}`}>{formatDate(t.prazo)}</span>}
+                        {t.pessoa_nome && <span className="text-[10px] text-text-secondary font-medium flex items-center gap-1"><User size={10} /> {t.pessoa_nome}</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => { setTarefaFormData(t); setIsTarefaFormOpen(true); }} className="p-2 text-primary-btn hover:bg-primary-btn/10 rounded"><Edit size={18} /></button>
+                    <button onClick={() => handleDeleteTarefa(t.id!)} className="p-2 text-error-expired hover:bg-error-expired/10 rounded"><Trash2 size={18} /></button>
+                  </div>
+                </div>
+              )
+            })}
+            {filteredTarefas.length === 0 && <div className="py-20 text-center"><CheckSquare size={48} className="mx-auto text-gray-200 mb-4" /><p className="text-text-secondary">Nenhuma tarefa encontrada.</p></div>}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const renderAgenda = () => {
+    return (
+      <div className="p-8 flex flex-col h-full overflow-hidden">
+        <div className="flex justify-between items-center mb-8 shrink-0">
+          <div><h1 className="text-2xl font-bold text-text-main">Agenda</h1><p className="text-text-secondary">Gerencie seus compromissos e reuniões.</p></div>
+          <button onClick={() => { setAgendaFormData({ titulo: '', descricao: '', data: new Date().toISOString().split('T')[0], horario: '', realizado: 0 }); setIsAgendaFormOpen(true); }} className="flex items-center gap-2 bg-primary-btn text-white px-6 py-3 rounded-lg font-bold hover:opacity-90 transition-opacity shadow-md"><Plus size={20} /> Novo Compromisso</button>
+        </div>
+        <div className="flex-1 overflow-y-auto pr-2">
+          <div className="space-y-8">
+            {/* Agrupar por data */}
+            {Array.from(new Set(agenda.map(a => a.data))).map(date => (
+              <div key={date} className="space-y-4">
+                <h3 className="text-sm font-bold text-text-secondary uppercase tracking-wider flex items-center gap-2">
+                  <Calendar size={16} /> {formatDate(date)} {date === new Date().toISOString().split('T')[0] ? '(HOJE)' : ''}
+                </h3>
+                <div className="grid grid-cols-1 gap-3">
+                  {agenda.filter(a => a.data === date).map(item => (
+                    <div key={item.id} className={`bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-primary-btn/20 transition-all ${item.realizado ? 'opacity-60' : ''}`}>
+                      <div className="flex items-center gap-4 flex-1">
+                        <div className="w-16 text-center shrink-0">
+                          <p className="text-lg font-bold text-primary-btn">{item.horario || '--:--'}</p>
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className={`font-bold text-text-main ${item.realizado ? 'line-through' : ''}`}>{item.titulo}</h4>
+                          <p className="text-xs text-text-secondary truncate">{item.descricao || 'Sem descrição'}</p>
+                          {item.pessoa_nome && <p className="text-[10px] text-primary-btn font-bold mt-1 uppercase">{item.pessoa_nome}</p>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <button onClick={() => toggleAgendaRealizado(item)} className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${item.realizado ? 'bg-success text-white' : 'bg-gray-100 text-text-secondary hover:bg-success/10 hover:text-success'}`}>
+                          {item.realizado ? 'REALIZADO' : 'MARCAR REALIZADO'}
+                        </button>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => { setAgendaFormData(item); setIsAgendaFormOpen(true); }} className="p-2 text-primary-btn hover:bg-primary-btn/10 rounded"><Edit size={16} /></button>
+                          <button onClick={() => handleDeleteAgenda(item.id!)} className="p-2 text-error-expired hover:bg-error-expired/10 rounded"><Trash2 size={16} /></button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {agenda.length === 0 && <div className="py-20 text-center"><Calendar size={48} className="mx-auto text-gray-200 mb-4" /><p className="text-text-secondary">Nenhum compromisso agendado.</p></div>}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-screen w-full overflow-hidden font-sans">
       <aside className="w-64 bg-sidebar-bg text-white flex flex-col shrink-0">
@@ -968,7 +1323,9 @@ const App: React.FC = () => {
           {activeTab === 'Protocolos' && renderProtocolos()}
           {activeTab === 'Documentos Recebidos' && renderDocumentosGlobal()}
           {activeTab === 'Documentos Gerados' && renderDocumentosGeradosGlobal()}
-          {!['Dashboard', 'Pessoas / Dossiês', 'Protocolos', 'Documentos Recebidos', 'Documentos Gerados'].includes(activeTab) && (
+          {activeTab === 'Tarefas' && renderTarefas()}
+          {activeTab === 'Agenda' && renderAgenda()}
+          {!['Dashboard', 'Pessoas / Dossiês', 'Protocolos', 'Documentos Recebidos', 'Documentos Gerados', 'Tarefas', 'Agenda'].includes(activeTab) && (
             <div className="p-8 flex items-center justify-center h-full"><p className="text-text-secondary text-lg">Seção {activeTab} em desenvolvimento.</p></div>
           )}
         </div>
@@ -1106,6 +1463,56 @@ const App: React.FC = () => {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tarefa */}
+      {isTarefaFormOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-surface-card"><h2 className="text-xl font-bold text-sidebar-bg">{tarefaFormData.id ? 'Editar Tarefa' : 'Nova Tarefa'}</h2><button onClick={() => setIsTarefaFormOpen(false)} className="text-text-secondary hover:text-text-main">✕</button></div>
+            <form onSubmit={handleSaveTarefa} className="p-8 space-y-6">
+              <div><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Título da Tarefa *</label><input required className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none" value={tarefaFormData.titulo} onChange={e => setTarefaFormData({...tarefaFormData, titulo: e.target.value})} /></div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Prioridade</label>
+                  <select className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none" value={tarefaFormData.prioridade} onChange={e => setTarefaFormData({...tarefaFormData, prioridade: e.target.value as any})}>
+                    <option value="baixa">Baixa</option>
+                    <option value="media">Média</option>
+                    <option value="alta">Alta</option>
+                  </select>
+                </div>
+                <div><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Prazo</label><input type="date" className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none" value={tarefaFormData.prazo} onChange={e => setTarefaFormData({...tarefaFormData, prazo: e.target.value})} /></div>
+              </div>
+              <div><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Descrição</label><textarea rows={3} className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none resize-none" value={tarefaFormData.descricao} onChange={e => setTarefaFormData({...tarefaFormData, descricao: e.target.value})} /></div>
+              <div className="flex justify-end gap-4 pt-4"><button type="button" onClick={() => setIsTarefaFormOpen(false)} className="px-6 py-3 text-text-secondary font-bold hover:text-text-main">Cancelar</button><button type="submit" className="px-8 py-3 bg-primary-btn text-white rounded-lg font-bold hover:opacity-90 shadow-lg">Salvar Tarefa</button></div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Agenda */}
+      {isAgendaFormOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-surface-card"><h2 className="text-xl font-bold text-sidebar-bg">{agendaFormData.id ? 'Editar Compromisso' : 'Novo Compromisso'}</h2><button onClick={() => setIsAgendaFormOpen(false)} className="text-text-secondary hover:text-text-main">✕</button></div>
+            <form onSubmit={handleSaveAgenda} className="p-8 space-y-6">
+              <div><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Título do Compromisso *</label><input required className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none" value={agendaFormData.titulo} onChange={e => setAgendaFormData({...agendaFormData, titulo: e.target.value})} /></div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Data *</label><input type="date" required className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none" value={agendaFormData.data} onChange={e => setAgendaFormData({...agendaFormData, data: e.target.value})} /></div>
+                <div><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Horário</label><input type="time" className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none" value={agendaFormData.horario} onChange={e => setAgendaFormData({...agendaFormData, horario: e.target.value})} /></div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Vincular Pessoa (Opcional)</label>
+                <select className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none" value={agendaFormData.pessoa_id || ''} onChange={e => setAgendaFormData({...agendaFormData, pessoa_id: e.target.value ? Number(e.target.value) : undefined})}>
+                  <option value="">Nenhuma pessoa</option>
+                  {pessoas.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                </select>
+              </div>
+              <div><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Descrição</label><textarea rows={3} className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none resize-none" value={agendaFormData.descricao} onChange={e => setAgendaFormData({...agendaFormData, descricao: e.target.value})} /></div>
+              <div className="flex justify-end gap-4 pt-4"><button type="button" onClick={() => setIsAgendaFormOpen(false)} className="px-6 py-3 text-text-secondary font-bold hover:text-text-main">Cancelar</button><button type="submit" className="px-8 py-3 bg-primary-btn text-white rounded-lg font-bold hover:opacity-90 shadow-lg">Salvar Compromisso</button></div>
+            </form>
           </div>
         </div>
       )}

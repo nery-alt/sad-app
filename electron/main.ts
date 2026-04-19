@@ -75,6 +75,35 @@ function initDatabase() {
         FOREIGN KEY (pessoa_id) REFERENCES pessoas(id),
         FOREIGN KEY (protocolo_id) REFERENCES protocolos(id)
       );
+
+      CREATE TABLE IF NOT EXISTS tarefas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        titulo TEXT NOT NULL,
+        descricao TEXT,
+        prioridade TEXT,
+        prazo TEXT,
+        status TEXT,
+        pessoa_id INTEGER,
+        protocolo_id INTEGER,
+        criado_em TEXT,
+        atualizado_em TEXT,
+        FOREIGN KEY (pessoa_id) REFERENCES pessoas(id),
+        FOREIGN KEY (protocolo_id) REFERENCES protocolos(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS agenda (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        titulo TEXT NOT NULL,
+        descricao TEXT,
+        data TEXT NOT NULL,
+        horario TEXT,
+        pessoa_id INTEGER,
+        protocolo_id INTEGER,
+        realizado INTEGER DEFAULT 0,
+        criado_em TEXT,
+        FOREIGN KEY (pessoa_id) REFERENCES pessoas(id),
+        FOREIGN KEY (protocolo_id) REFERENCES protocolos(id)
+      );
     `)
   } catch (err) {
     console.error('Failed to initialize database:', err)
